@@ -6,7 +6,7 @@ from threading import Thread
 import time
 import openai
 
-database_name = "agent.db"
+
 user_id = "mind_maker_agent"
 homeserver_url = "https://matrix-client.matrix.org"
 device_id = "YOLDLKCAKY"
@@ -17,13 +17,17 @@ try:
     password = open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
     room_id = "!KWqtDRucLSHLiihsNl:matrix.org"
     web_host = "http://127.0.0.1:8080"
+    database_name = "agent.db"
+    message_database = 'messages.db'
 except FileNotFoundError:
     openai.api_key = open("/app/keys/openAIAPI", "r").read().rstrip("\n")
     password = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
     room_id = "!qnfhwxqTeAtmZuerxX:matrix.org"
     web_host = "http://agent.iv-labs.org"
+    database_name = "/app/db/agent.db"
+    message_database = '/app/db/messages.db'
 
-message_database = 'messages.db'
+
 current_log_message=""
 
 # Create the database and the table if they do not exist
