@@ -75,13 +75,13 @@ def execute_sql_query(queries):
     results = ""
     for i, query in enumerate(queries.split(";\n")):
         try:
+            query = query.strip()
             c.execute(query)
             conn.commit()
             result = c.fetchall()
-            results += f"Query:\n{query}\n\nResult:\n{str(result)}\n"
+            results += f"Query:{query}\nResult:{str(result)}\n\n"
         except sqlite3.Error as e:
-            results += f"Query:\n{query}\n\nResult: Error\n"
-            print(e)
+            results += f"Query:{query}\nResult: Error\n\n"
     conn.close()
     return results
 
@@ -115,11 +115,11 @@ def on_dis(instruction, room):
     context = create_database_summary()
     prompt = list()
     prompt.append("""You are a very competent specialized bot that adds context to a task given by a user by retrieving information from a database. You should not answer the user's question but rather think about the additional context that may be contained in the database and that could be useful for the task. You need to create a SQL query able to gather additional context for another agent that will try answer that question. Your answer should absolutely contain a SQL query to try and gather more information for this task. Make sure you correctly enclose SQL with ```""")
-    prompt.append(f"Current context (may or may not be relevant): here is the result of some queries on the database: {context}")
+    prompt.append(f"Current structure of the database:\n {context}")
     prompt.append(f"{instruction}")
 
     sprompt = "\t" + "\t\n".join(prompt)
-    append_log(f"Context generation prompt: \n{sprompt}")
+    append_log(f"<b>gpt prompt</b><br>{sprompt}")
 
     rep = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -129,7 +129,7 @@ def on_dis(instruction, room):
     )
     body = rep["choices"][0]["message"]["content"]
     s="\t"+'\n\t'.join(body.split('\n'))
-    append_log(f"Context generation answer: \n{s}")
+    append_log(f"<b>gpt answer</b><br>{s}")
 
     bs = body.split("```")
     sql_context = ""
@@ -137,23 +137,21 @@ def on_dis(instruction, room):
         if len(bs)>3:
             for i in range(1,len(bs),2):
                 query = bs[i]
-                append_log(f"SQL query #{i}:\n{query}")
                 qres = execute_sql_query(query)
-                append_log(f"SQL result #{i}:\n{qres}")
-                sql_context += f"SQL Query #{i}: {query}\nResult #{i}: {qres}\n"
+                append_log(f"<b>sql</b><br>{qres}")
+                sql_context += qres
         else:
             query = bs[1]
-            append_log(f"SQL query:\n{query}")
             qres = execute_sql_query(query)
-            append_log(f"SQL result:\n{qres}")
-            sql_context += f"SQL Query: {query}\nResult: {qres}\n"
+            append_log(f"<b>sql</b><br>{qres}")
+            sql_context += qres
 
     prompt = list()
     prompt.append("""You are a very competent specialized bot that maintains a database about the community project. Your answer should contain the SQL query translating the instructions from the user. You should try really hard to produce a SQL request in your answer. Make sure you correctly enclose SQL with ```""")
     prompt.append(f"""Current context (may or may not be relevant): here is the result of some queries on the database: {sql_context}""")
     prompt.append(instruction)
     sprompt = "\t" + "\t\n".join(prompt)
-    append_log(f"Answer generation prompt: \n{sprompt}")
+    append_log(f"<b>gpt prompt</b><br>{sprompt}")
     rep = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": c} for c in prompt],
@@ -162,7 +160,7 @@ def on_dis(instruction, room):
     )
     body = rep["choices"][0]["message"]["content"]
     s = "\t"+'\n\t'.join(body.split('\n'))
-    append_log(f"Answer generation answer: \n{s}")
+    append_log(f"<b>gpt answer</b><br>\n{s}")
 
     bs = body.split("```")
     sql_answer = ""
@@ -170,16 +168,14 @@ def on_dis(instruction, room):
         if len(bs)>3:
             for i in range(1,len(bs),2):
                 query = bs[i]
-                append_log(f"SQL query #{i}:\n{query}")
                 qres = execute_sql_query(query)
-                append_log(f"SQL result #{i}:\n{qres}")
-                sql_answer += f"SQL Query #{i}: {query}\nResult #{i}: {qres}\n"
+                append_log(f"<b>sql</b><br>{qres}")
+                sql_answer += qres
         else:
             query = bs[1]
-            append_log(f"SQL query:\n{query}")
             qres = execute_sql_query(query)
-            append_log(f"SQL result:\n{qres}")
-            sql_answer += f"SQL Query: {query}\nResult: {qres}\n"
+            append_log(f"<b>sql</b><br>{qres}")
+            sql_answer += qres
     write_log()
     room.send_text(sql_answer)
 
