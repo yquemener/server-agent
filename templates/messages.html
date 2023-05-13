@@ -2,18 +2,18 @@
 <html>
   <head>
     <title>Matrix Bot Messages</title>
-    <style>
-      details {
-        margin-bottom: 1em;
-      }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
     <h1>Matrix Bot Messages</h1>
     {% for timestamp, message in messages %}
-      <details>
+      <details class="message-box">
         <summary><time>{{ timestamp }}</time> - {{ message.split('\n', 1)[0] }}</summary>
-        <p>{{ message|replace('\n', '<br>')|safe }}</p>
+        {% for part in message.split('----------') %}
+          <div class="message-part">
+            <p>{{ part.strip()|replace('\n', '<br>')|replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')|safe }}</p>
+          </div>
+        {% endfor %}
       </details>
     {% endfor %}
   </body>
