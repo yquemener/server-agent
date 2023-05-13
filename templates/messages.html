@@ -11,7 +11,8 @@
         <summary><time>{{ timestamp }}</time> - {{ message.split('\n', 1)[0] }}</summary>
         {% for part in message.split('----------') %}
           <div class="message-part">
-            <p>{{ part.strip()|replace('\n', '<br>')|replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')|safe }}</p>
+            {% set first_line, rest = part.strip().split('\n', 1) if '\n' in part.strip() else (part.strip(), '') %}
+            <p><strong>{{ first_line }}</strong><br>{{ rest }}</p>
           </div>
         {% endfor %}
       </details>

@@ -11,14 +11,17 @@ user_id = "mind_maker_agent"
 homeserver_url = "https://matrix-client.matrix.org"
 device_id = "YOLDLKCAKY"
 
+
 try:
     openai.api_key = open("/home/yves/keys/openAIAPI", "r").read().rstrip("\n")
     password = open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
     room_id = "!KWqtDRucLSHLiihsNl:matrix.org"
+    web_host = "http://127.0.0.1:8080"
 except FileNotFoundError:
     openai.api_key = open("/app/keys/openAIAPI", "r").read().rstrip("\n")
     password = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
     room_id = "!qnfhwxqTeAtmZuerxX:matrix.org"
+    web_host = "http://agent.iv-labs.org"
 
 message_database = 'messages.db'
 current_log_message=""
@@ -119,7 +122,7 @@ def on_dis(instruction, room):
     prompt.append(f"{instruction}")
 
     sprompt = "\t" + "\t\n".join(prompt)
-    append_log(f"<b>gpt prompt</b><br>{sprompt}")
+    append_log(f"gpt prompt\n{sprompt}")
 
     rep = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -129,7 +132,7 @@ def on_dis(instruction, room):
     )
     body = rep["choices"][0]["message"]["content"]
     s="\t"+'\n\t'.join(body.split('\n'))
-    append_log(f"<b>gpt answer</b><br>{s}")
+    append_log(f"gpt answer\n{s}")
 
     bs = body.split("```")
     sql_context = ""
@@ -138,12 +141,12 @@ def on_dis(instruction, room):
             for i in range(1,len(bs),2):
                 query = bs[i]
                 qres = execute_sql_query(query)
-                append_log(f"<b>sql</b><br>{qres}")
+                append_log(f"sql\n{qres}")
                 sql_context += qres
         else:
             query = bs[1]
             qres = execute_sql_query(query)
-            append_log(f"<b>sql</b><br>{qres}")
+            append_log(f"sql\n{qres}")
             sql_context += qres
 
     prompt = list()
@@ -151,7 +154,7 @@ def on_dis(instruction, room):
     prompt.append(f"""Current context (may or may not be relevant): here is the result of some queries on the database: {sql_context}""")
     prompt.append(instruction)
     sprompt = "\t" + "\t\n".join(prompt)
-    append_log(f"<b>gpt prompt</b><br>{sprompt}")
+    append_log(f"gpt prompt\n{sprompt}")
     rep = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": c} for c in prompt],
@@ -160,7 +163,7 @@ def on_dis(instruction, room):
     )
     body = rep["choices"][0]["message"]["content"]
     s = "\t"+'\n\t'.join(body.split('\n'))
-    append_log(f"<b>gpt answer</b><br>\n{s}")
+    append_log(f"gpt answer\n\n{s}")
 
     bs = body.split("```")
     sql_answer = ""
@@ -169,12 +172,12 @@ def on_dis(instruction, room):
             for i in range(1,len(bs),2):
                 query = bs[i]
                 qres = execute_sql_query(query)
-                append_log(f"<b>sql</b><br>{qres}")
+                append_log(f"sql\n{qres}")
                 sql_answer += qres
         else:
             query = bs[1]
             qres = execute_sql_query(query)
-            append_log(f"<b>sql</b><br>{qres}")
+            append_log(f"sql\n{qres}")
             sql_answer += qres
     write_log()
     room.send_text(sql_answer)
@@ -191,14 +194,14 @@ def on_message(room, event):
             try:
                 on_dis(command, room)
             except openai.error.RateLimitError:
-                append_log(f"<b>openai</b><br>RateLimitError")
+                append_log(f"openai\nRateLimitError")
                 write_log()
 
 def matrix_bot():
     client = MatrixClient(homeserver_url)
     client.login(username=user_id, password=password, sync=True)
     room = client.join_room(room_id)
-    room.send_text("Hi!")
+    room.send_text(f"Hi! Logs available at {web_host}")
     room.add_listener(on_message)
     client.start_listener_thread()
 
