@@ -80,7 +80,7 @@ def execute_sql_query(queries):
     conn = sqlite3.connect(database_name)
     c = conn.cursor()
     results = ""
-    for i, query in enumerate(queries.split(";\n")):
+    for i, query in enumerate(queries.strip().split(";\n")):
         try:
             query = query.strip()
             c.execute(query)
@@ -119,12 +119,21 @@ def write_log():
 def on_dis(instruction, room):
     append_log(f"Instruction: {instruction}")
 
-    context = create_database_summary()
+    db_context = create_database_summary()
     prompt = list()
-    prompt.append("""You are a very competent specialized bot that adds context to a task given by a user by retrieving information from a database. You should not answer the user's question but rather think about the additional context that may be contained in the database and that could be useful for the task. You need to create a SQL query able to gather additional context for another agent that will try answer that question. Your answer should absolutely contain a SQL query to try and gather more information for this task. Make sure you correctly enclose SQL with ```""")
-    prompt.append(f"Current structure of the database:\n {context}")
-    prompt.append(f"{instruction}")
-
+    prompt.append(
+f"""You are a very competent specialized bot that retrieves in a database the information necessary to solve a task given by a user.
+The task user2 gave us is:
+'''
+{instruction}
+''' 
+The current structure of the database is:\n {db_context}
+You should do the task user2 gave us but rather think about the information necessary to solve this task and form SQL request to retrieve this information. 
+First, list the information you need then formulate SQL requests to acquire it. 
+Do not generate SQL requests that modify the database or the tables in it.
+Only do read-only requests. Do not delete or insert records with these requests. Do not alter tables.
+Put ``` around your SQL requests.
+""")
     sprompt = "\t" + "\t\n".join(prompt)
     append_log(f"gpt prompt\n{sprompt}")
 
@@ -154,9 +163,25 @@ def on_dis(instruction, room):
             sql_context += qres
 
     prompt = list()
-    prompt.append("""You are a very competent specialized bot that maintains a database about the community project. Your answer should contain the SQL query translating the instructions from the user. You should try really hard to produce a SQL request in your answer. Make sure you correctly enclose SQL with ```""")
-    prompt.append(f"""Current context (may or may not be relevant): here is the result of some queries on the database: {sql_context}""")
-    prompt.append(instruction)
+    prompt.append(
+f"""You are a very competent specialized bot that maintains a database about a community project.
+User2 gave us the following task:
+'''
+{instruction}
+''' 
+The current structure of the database is:
+{db_context}
+
+In order to help, the following SQL queries were made by an information retrieval agent:
+{sql_context}
+
+First, determine whether or not the task requires more SQL requests than the ones the retrieval agent already did.
+If yes, generate only the necessary additional requests, if any. Do not repeat the requests of the retrieval agent if they were successful. 
+Put ``` around your own SQL requests.
+After this, if the task requires to give some information to user2, write the information he required after the string "Output: ".
+User2 does not want to run SQL requests, they want to read the actual result of queries, formatted in natural language. 
+Conclude the message by a single sentence starting with "Dear user," and explaining briefly if the task was successfully done.
+""")
     sprompt = "\t" + "\t\n".join(prompt)
     append_log(f"gpt prompt\n{sprompt}")
     rep = openai.ChatCompletion.create(
@@ -184,7 +209,13 @@ def on_dis(instruction, room):
             append_log(f"sql\n{qres}")
             sql_answer += qres
     write_log()
-    room.send_text(sql_answer)
+    try:
+        output = body.split("Output:")[1].split("Dear user,")[0]
+        room.send_text(output)
+    except IndexError:
+        room.send_text(body)
+    if len(sql_answer.strip()) > 0:
+        room.send_text(sql_answer)
 
 def on_message(room, event):
     print(event)
