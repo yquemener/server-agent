@@ -92,13 +92,38 @@ def execute_sql_query(queries):
     conn.close()
     return results
 
-@app.route('/')
-def home():
+# Route pour afficher le contenu des tables
+@app.route('/db')
+def show_table_data():
+    conn = sqlite3.connect(database_name)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Obtenir la liste des tables
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = cursor.fetchall()
+
+    table_data = {}
+    for table in tables:
+        table_name = table['name']
+        cursor.execute(f"SELECT * FROM {table_name};")
+        rows = cursor.fetchall()
+        table_data[table_name] = [dict(row) for row in rows]
+
+    conn.close()
+    return render_template('tables.html', table_data=table_data)
+
+@app.route('/bot')
+def bot():
     conn = sqlite3.connect(message_database)
     cursor = conn.cursor()
     messages = cursor.execute('SELECT * FROM messages ORDER BY timestamp DESC;').fetchall()
     conn.close()
     return render_template('messages.html', messages=messages)
+
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 
 def append_log(s):
