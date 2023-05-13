@@ -8,11 +8,15 @@ import openai
 
 database_name = "agent.db"
 user_id = "mind_maker_agent"
-password = open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
 homeserver_url = "https://matrix-client.matrix.org"
 room_id = "!qnfhwxqTeAtmZuerxX:matrix.org"
 device_id = "YOLDLKCAKY"
-openai.api_key = open("/home/yves/keys/openAIAPI", "r").read().rstrip("\n")
+try:
+    openai.api_key = open("/home/yves/keys/openAIAPI", "r").read().rstrip("\n")
+    password = open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
+except FileNotFoundError:
+    openai.api_key = open("/app/keys/openAIAPI", "r").read().rstrip("\n")
+    password = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
 
 message_database = 'messages.db'
 
