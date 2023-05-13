@@ -5,6 +5,12 @@ FROM python:3.9-slim-buster
 # to the terminal with out buffering it first
 ENV PYTHONUNBUFFERED 1
 
+# Install any needed packages specified in requirements.txt
+RUN pip install --upgrade pip
+RUN pip install flask
+RUN pip install matrix_client
+RUN pip install openai
+
 # Create root directory for our project in the container
 RUN mkdir /app
 
@@ -13,14 +19,6 @@ WORKDIR /app
 
 # Copy the current directory contents into the container at /app
 COPY . /app/
-
-# Install any needed packages specified in requirements.txt
-RUN pip install --upgrade pip
-RUN pip install flask 
-RUN pip install matrix_client
-RUN pip install openai
-
-EXPOSE 8000
 
 # Start up Nginx server
 CMD ["python", "bot_and_web.py"]
