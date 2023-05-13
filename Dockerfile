@@ -22,5 +22,5 @@ RUN pip install matrix_client
 EXPOSE 8000
 
 # Start up Nginx server
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["python", "bot_and_web.py"]
 
