@@ -18,6 +18,7 @@ COPY . /app/
 RUN pip install --upgrade pip
 RUN pip install flask 
 RUN pip install matrix_client
+RUN pip install openai
 
 EXPOSE 8000
 
