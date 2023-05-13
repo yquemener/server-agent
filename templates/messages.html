@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Matrix Bot Messages</title>
+    <style>
+      details {
+        margin-bottom: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Matrix Bot Messages</h1>
+    {% for timestamp, message in messages %}
+      <details>
+        <summary><time>{{ timestamp }}</time> - {{ message.split('\n', 1)[0] }}</summary>
+        <p>{{ message|replace('\n', '<br>')|safe }}</p>
+      </details>
+    {% endfor %}
+  </body>
+</html>
