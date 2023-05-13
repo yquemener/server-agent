@@ -188,7 +188,11 @@ def on_message(room, event):
 
         if event['content']['body'].startswith("!dis"):
             command = event['content']['body'][4:]
-            on_dis(command, room)
+            try:
+                on_dis(command, room)
+            except openai.error.RateLimitError:
+                append_log(f"<b>openai</b><br>RateLimitError")
+                write_log()
 
 def matrix_bot():
     client = MatrixClient(homeserver_url)
