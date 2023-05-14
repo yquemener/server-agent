@@ -18,24 +18,30 @@ try:
     room_id = "!KWqtDRucLSHLiihsNl:matrix.org"
     web_host = "http://127.0.0.1:8080"
     database_name = "agent.db"
-    message_database = 'messages.db'
+    bot_log_database = 'bot.db'
 except FileNotFoundError:
     openai.api_key = open("/app/keys/openAIAPI", "r").read().rstrip("\n")
     password = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
     room_id = "!qnfhwxqTeAtmZuerxX:matrix.org"
     web_host = "http://agent.iv-labs.org"
     database_name = "/app/db/agent.db"
-    message_database = '/app/db/messages.db'
+    bot_log_database = '/app/db/bot.db'
 
 
 current_log_message=""
 
 # Create the database and the table if they do not exist
-conn = sqlite3.connect(message_database)
+conn = sqlite3.connect(bot_log_database)
 cursor = conn.cursor()
 cursor.execute('''
-    CREATE TABLE IF NOT EXISTS messages (
+    CREATE TABLE IF NOT EXISTS bot_log (
         timestamp TEXT NOT NULL,
+        message TEXT NOT NULL
+    );''')
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS conversation (
+        timestamp INTEGER NOT NULL,
+        author TEXT NOT NULL,
         message TEXT NOT NULL
     );
 ''')
@@ -115,11 +121,11 @@ def show_table_data():
 
 @app.route('/bot')
 def bot():
-    conn = sqlite3.connect(message_database)
+    conn = sqlite3.connect(bot_log_database)
     cursor = conn.cursor()
-    messages = cursor.execute('SELECT * FROM messages ORDER BY timestamp DESC;').fetchall()
+    messages = cursor.execute('SELECT * FROM bot_log ORDER BY timestamp DESC;').fetchall()
     conn.close()
-    return render_template('messages.html', messages=messages)
+    return render_template('bot_log.html', messages=messages)
 
 @app.route('/')
 def home():
@@ -134,29 +140,34 @@ def append_log(s):
 
 def write_log():
     global current_log_message
-    conn = sqlite3.connect(message_database)
+    conn = sqlite3.connect(bot_log_database)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO messages VALUES (?, ?);', (time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()), current_log_message))
+    cursor.execute('INSERT INTO bot_log VALUES (?, ?);', (time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()), current_log_message))
     conn.commit()
     conn.close()
     current_log_message=""
 
-def on_dis(instruction, room):
+def on_dis(instruction, room, username):
     append_log(f"Instruction: {instruction}")
 
+    username = extract_username(username)
+    conversation_context = prepare_history()
     db_context = create_database_summary()
     prompt = list()
     prompt.append(
-f"""You are a very competent specialized bot that retrieves in a database the information necessary to solve a task given by a user.
-The task user2 gave us is:
+f"""You are a very competent specialized bot that retrieves in a database the information necessary to solve a task given by a user named {username}.
+The task {username} gave us is:
 '''
 {instruction}
 ''' 
+The current conversation context is:
+'''
+{conversation_context}
+'''
 The current structure of the database is:\n {db_context}
-You should do the task user2 gave us but rather think about the information necessary to solve this task and form SQL request to retrieve this information. 
+You should do the task {username} gave us but rather think about the information necessary to solve this task and form SQL request to retrieve this information. 
 First, list the information you need then formulate SQL requests to acquire it. 
-Do not generate SQL requests that modify the database or the tables in it.
-Only do read-only requests. Do not delete or insert records with these requests. Do not alter tables.
+Only generate SELECT SQL requests. Do not generate ones that modify the database or the tables in it like DROP, ALTER, INSERT, UPDATE or REMOVE.
 Put ``` around your SQL requests.
 """)
     sprompt = "\t" + "\t\n".join(prompt)
@@ -169,7 +180,9 @@ Put ``` around your SQL requests.
         # max_tokens=500,
     )
     body = rep["choices"][0]["message"]["content"]
-    s="\t"+'\n\t'.join(body.split('\n'))
+    s = "\t"+'\n\t'.join(body.split('\n'))
+    s += f'\nfinish_reason {rep["choices"][0]["finish_reason"]}\n'
+    s += f'tokens {rep["usage"]}\n'
     append_log(f"gpt answer\n{s}")
 
     bs = body.split("```")
@@ -190,10 +203,16 @@ Put ``` around your SQL requests.
     prompt = list()
     prompt.append(
 f"""You are a very competent specialized bot that maintains a database about a community project.
-User2 gave us the following task:
+User named{username} gave us the following task:
 '''
 {instruction}
 ''' 
+
+The current conversation context is:
+'''
+{conversation_context}
+'''
+
 The current structure of the database is:
 {db_context}
 
@@ -203,9 +222,9 @@ In order to help, the following SQL queries were made by an information retrieva
 First, determine whether or not the task requires more SQL requests than the ones the retrieval agent already did.
 If yes, generate only the necessary additional requests, if any. Do not repeat the requests of the retrieval agent if they were successful. 
 Put ``` around your own SQL requests.
-After this, if the task requires to give some information to user2, write the information he required after the string "Output: ".
-User2 does not want to run SQL requests, they want to read the actual result of queries, formatted in natural language. 
-Conclude the message by a single sentence starting with "Dear user," and explaining briefly if the task was successfully done.
+After this, if the task requires to give some information to {username}, write the information he required after the string "Output: ".
+{username} does not want to run SQL requests, they want to read the actual result of queries, formatted in natural language. 
+Conclude the message by a single sentence starting with "Dear {username}," and explaining briefly if the task was successfully done.
 """)
     sprompt = "\t" + "\t\n".join(prompt)
     append_log(f"gpt prompt\n{sprompt}")
@@ -217,6 +236,8 @@ Conclude the message by a single sentence starting with "Dear user," and explain
     )
     body = rep["choices"][0]["message"]["content"]
     s = "\t"+'\n\t'.join(body.split('\n'))
+    s += f'\nfinish_reason {rep["choices"][0]["finish_reason"]}\n'
+    s += f'tokens {rep["usage"]}\n'
     append_log(f"gpt answer\n\n{s}")
 
     bs = body.split("```")
@@ -242,9 +263,68 @@ Conclude the message by a single sentence starting with "Dear user," and explain
     if len(sql_answer.strip()) > 0:
         room.send_text(sql_answer)
 
+# Turns a number of seconds into a human readable approximation
+def format_time_interval(seconds):
+    intervals = [
+        ('days', 86400),
+        ('hours', 3600),
+        ('minutes', 60),
+        ('seconds', 1)
+    ]
+
+    result = []
+
+    for name, count in intervals:
+        value = seconds // count
+        if value:
+            seconds -= value * count
+            if value == 1:
+                name = name.rstrip('s')
+            result.append(f"{value} {name}")
+
+    return result[0]
+
+def extract_username(s):
+    name = s.lstrip("@")
+    server = s.split(":")[-1]
+    if server == "matrix.org":
+        return name.split(":")[0]
+    else:
+        return name
+
+
+def prepare_history():
+    conn = sqlite3.connect(bot_log_database)
+    cursor = conn.cursor()
+    messages = cursor.execute('SELECT timestamp, author, message FROM conversation ORDER BY timestamp ASC;').fetchall()
+    previous_ts=messages[0][0]
+    s=""
+    for m in messages:
+        name = extract_username(m[1])
+        message = m[2]
+        if "Hi! Logs available at" in message:
+            continue
+        if m[0]-previous_ts>60:
+            delta = format_time_interval(m[0]-previous_ts)
+            s+=f"{delta} later\n"
+        s+=f"{name}: {message}\n"
+        previous_ts = m[0]
+    conn.close()
+    return s
+
+
 def on_message(room, event):
     print(event)
+
     if event['type'] == "m.room.message" and event['content']['msgtype'] == "m.text":
+        conn = sqlite3.connect(bot_log_database)
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO conversation VALUES (?, ?, ?);', (event['origin_server_ts'] // 1000,
+                                                                      event['sender'],
+                                                                      event['content']['body']))
+        conn.commit()
+        conn.close()
+
         if event['content']['body'].startswith("!echo"):
             response = event['content']['body'][5:]
             room.send_text(response)
@@ -252,7 +332,7 @@ def on_message(room, event):
         if event['content']['body'].startswith("!dis"):
             command = event['content']['body'][4:]
             try:
-                on_dis(command, room)
+                on_dis(command, room, event['sender'])
             except openai.error.RateLimitError:
                 append_log(f"openai\nRateLimitError")
                 write_log()
