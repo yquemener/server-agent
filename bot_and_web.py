@@ -147,11 +147,14 @@ def write_log():
     conn.close()
     current_log_message=""
 
-def on_dis(instruction, room, username):
+def on_dis(instruction, room, username, use_context=True):
     append_log(f"Instruction: {instruction}")
 
     username = extract_username(username)
-    conversation_context = prepare_history()
+    if use_context:
+        conversation_context = prepare_history()
+    else:
+        conversation_context = ""
     db_context = create_database_summary()
     prompt = list()
     prompt.append(
@@ -333,6 +336,13 @@ def on_message(room, event):
             command = event['content']['body'][4:]
             try:
                 on_dis(command, room, event['sender'])
+            except openai.error.RateLimitError:
+                append_log(f"openai\nRateLimitError")
+                write_log()
+        if event['content']['body'].startswith("!nc"):
+            command = event['content']['body'][4:]
+            try:
+                on_dis(command, room, event['sender'], use_context=False)
             except openai.error.RateLimitError:
                 append_log(f"openai\nRateLimitError")
                 write_log()
