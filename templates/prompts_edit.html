@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Edit Prompts</title>
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+  <script>
+    function populateFields(name, prompt) {
+      document.getElementById("name").value = name;
+      document.getElementById("prompt").value = prompt.replace(/<br>/g, '\n');
+    }
+  </script>
+</head>
+<body>
+  <h1>Edit Prompts</h1>
+  <form action="/prompts_edit/" method="post">
+    <div>
+      <label for="name">Name:</label>
+      <input type="text" id="name" name="name">
+    </div>
+    <div>
+      <label for="prompt">Prompt:</label>
+      <textarea id="prompt" name="prompt"></textarea>
+    </div>
+    <div>
+      <input type="submit" value="Add/Edit Prompt">
+    </div>
+  </form>
+
+  <h2>Prompts:</h2>
+  {% for prompt in prompts %}
+  <details class="message-box" onclick="populateFields('{{ prompt[0] }}', '{{ prompt[1] }}'.replace(/<br>/g, '\n'))">
+    <summary>{{ prompt[0] }}</summary>
+    <div class="message-part">
+      <p>{{ prompt[1] | safe }}</p>
+    </div>
+    <form action="/prompts_edit/" method="post">
+      <input type="hidden" name="name" value="{{ prompt[0] }}">
+      <input type="hidden" name="prompt" value="{{ prompt[1] }}">
+      <input type="submit" name="delete_prompt" value="Delete Prompt">
+    </form>
+  </details>
+  {% endfor %}
+</body>
+</html>

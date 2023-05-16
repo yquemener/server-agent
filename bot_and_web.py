@@ -1,7 +1,8 @@
+import re
 import sqlite3
 
 from matrix_client.client import MatrixClient
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from threading import Thread
 import time
 import openai
@@ -33,6 +34,7 @@ except FileNotFoundError:
 current_log_message = ""
 conversation_context = ""
 current_conversation_summary = (-1, "") # (timestamp of last summed up message, summary)
+update_history = True
 
 # Create the database and the table if they do not exist
 conn = sqlite3.connect(bot_log_database)
@@ -55,6 +57,8 @@ cursor.execute('''
         message TEXT NOT NULL
     );
 ''')
+cursor.execute("CREATE TABLE IF NOT EXISTS prompts (name TEXT, prompt TEXT)")
+
 result = cursor.execute("SELECT * FROM conversation_summary ORDER BY timestamp DESC LIMIT 1;").fetchall()
 if len(result) > 0:
     current_conversation_summary = result
@@ -142,6 +146,49 @@ def bot():
 @app.route('/')
 def home():
     return render_template('index.html')
+
+
+@app.route('/prompts_edit/', methods=['GET', 'POST'])
+def prompts_edit():
+    if request.method == 'POST':
+        name = request.form['name']
+        prompt = request.form['prompt']
+
+        conn = sqlite3.connect(bot_log_database)
+        cursor = conn.cursor()
+
+
+        if 'delete_prompt' in request.form:
+            # Delete prompt if the delete button was clicked
+            cursor.execute("DELETE FROM prompts WHERE name=?", (name,))
+        else:
+            # Check if prompt with the same name exists
+            cursor.execute("SELECT name FROM prompts WHERE name=?", (name,))
+            existing_prompt = cursor.fetchone()
+
+            if existing_prompt:
+                # Prompt with the same name exists, update the prompt
+                cursor.execute("UPDATE prompts SET prompt=? WHERE name=?", (prompt, name))
+            else:
+                # Prompt with the same name doesn't exist, insert new prompt
+                cursor.execute("INSERT INTO prompts (name, prompt) VALUES (?, ?)", (name, prompt))
+
+        conn.commit()
+        conn.close()
+
+    conn = sqlite3.connect(bot_log_database)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, prompt FROM prompts")
+    rows = cursor.fetchall()
+    conn.close()
+
+    prompts = list()
+    for r in rows:
+        prompt = re.sub(r'\r?\n', '<br>', r[1])
+        prompt = re.sub(r'\'', '\\\'', prompt)
+        prompts.append((r[0], prompt))
+
+    return render_template('prompts_edit.html', prompts=prompts)
 
 
 def append_log(s, p=False):
@@ -406,66 +453,35 @@ def update_conversation_context():
 def on_conversation_context():
     global conversation_context
     return render_template('conversation_context.html', context=conversation_context)
-#
-#
-# def prepare_history():
-#     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-#     max_page_size = 3800
-#     max_context_size = 2000
-#
-#     conn = sqlite3.connect(bot_log_database)
-#     cursor = conn.cursor()
-#     messages = cursor.execute('SELECT timestamp, author, message FROM conversation ORDER BY timestamp ASC;').fetchall()
-#
-#     previous_ts=messages[0][0]
-#     current_summary = ""
-#     page = ""
-#     toksize = 0
-#     for m in messages:
-#         message_token_size = len(enc.encode(m))
-#         if toksize + message_token_size > max_page_size:
-#             current_summary = context_summarization(page, current_summary)
-#             page = ""
-#         else:
-#             toksize += message_token_size
-#         name = extract_username(m[1])
-#         message = m[2]
-#         if "Hi! Logs available at" in message:
-#             continue
-#         if m[0]-previous_ts>60:
-#             delta = format_time_interval(m[0]-previous_ts)
-#             page += f"{delta} later\n"
-#         page += f"{name}: {message}\n"
-#         previous_ts = m[0]
-#     conn.close()
-#     return page, current_summary
-
-
-
-
 
 
 def on_pdca(command, room, sender):
     global conversation_context
     print(command)
-    append_log(f"instruction\n{command}")
+    append_log(f"instruction: {command}")
     username = extract_username(sender)
 
     plan_prompt = f"""\
         You are a planning assistant named mind_maker_agent. Your task is to form a plan to solve the task given by the user {username}.
-        Make a list of the actions necessary to achieve the task.
-        The possible actions are:
-        1. Query a database for additional information
-        2. Ask a human
-        3. Execute a SQL query to modify a database
-        Return the plan as a list, for each item of the list, start with the action type number.
-        Your plan should not have more than 8 steps.
-        Steps should be explained in one sentence. Another agent will execute them.
-        If some information is missing to make a full plan to do the task, plan for the information acquisition and conclude your plan with a "4: plan again" step.
-        If 8 steps is to short to complete the tasks, put the first 7 steps of the plan and conclude your plan with a "4: plan again" step.
+        The only actions you can include in your plan are:
+        - Make a web search to acquire additional information (type: web search)
+        - Query an existing local database for additional information (type: DB search)
+        - Execute a bash command on a local ubuntu machine (type: cli)
+        - Write a python program (type: program)
+        - Write a content on our local website (type: publish)
+        - Ask a human to do a task, to provide analysis or to provide feedback (type: ask human)
+        - Execute a SQL query to modify a database (type: DB change)
+        Your plan should not contain other types of actions.
+        For each step of the plan please produce a list showing:
+            - a short description
+            - its type from the above type list
+            - an evaluation of the time it will take
+            - a justification of your time evaluation
+        Your plan must not have more than 8 steps but can have less. 
         
-        The task {username} gave us is: {command}
-        END TASK
+        The task {username} gave us is: '''
+        {command}
+        '''
         Here is a summary of the conversation so far:
         '''
         {conversation_context[0]}
@@ -476,10 +492,11 @@ def on_pdca(command, room, sender):
         '''
         """
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-    print(len(enc.encode(plan_prompt)))
+    print(f"Prompt tokens size: {len(enc.encode(plan_prompt))}")
 
     # Plan
     answer, codes = chatgpt_request(plan_prompt)
+    write_log()
     room.send_text(answer)
 
 def on_void(command, room):
@@ -489,46 +506,85 @@ def on_void(command, room):
     write_log()
 
 
+def on_prompt(command, room, sender):
+    # Runs a prompt that's from the prompts database
+
+    prompt_name = command.split(" ")[0]
+    conn = sqlite3.connect(bot_log_database)
+    cursor = conn.cursor()
+    prompt = cursor.execute('SELECT prompt FROM prompts WHERE name = ?;', (prompt_name,)).fetchall()
+    conn.close()
+    if len(prompt) == 0:
+        return
+    prompt = prompt[0][0]
+
+    prompt_context = {
+        "instruction": " ".join(command.split(" ")[1:]),
+        "username": extract_username(sender),
+        "conversation_context": conversation_context
+    }
+
+    populated_prompt = prompt.format(**prompt_context)
+    answer, codes = chatgpt_request(populated_prompt)
+    write_log()
+    room.send_text(answer)
 
 def on_message(room, event):
     print(event)
-
+    global update_history
     if event['type'] == "m.room.message" and event['content']['msgtype'] == "m.text":
-        conn = sqlite3.connect(bot_log_database)
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO conversation VALUES (?, ?, ?);', (event['origin_server_ts'] // 1000,
-                                                                      event['sender'],
-                                                                      event['content']['body']))
-        conn.commit()
-        conn.close()
-        update_conversation_context()
+        line = event['content']['body']
+        if line[0]=="!":
+            if line[1]=="!":
+                update_history = False
+            else:
+                update_history = True
+            args = line.split(" ")
+            command = args[0].lstrip("!")
+            instruction = " ".join(args[1:])
+            if command == "echo":
+                room.send_text(instruction)
+            try:
+                # Finds the SQL requests to do using context
+                if command == "dis":
+                    on_dis(instruction, room, event['sender'])
+                # Finds the SQL requests to do without using context
+                elif command == "nc":
+                    on_dis(instruction, room, event['sender'], use_context=False)
+                # Implements a plan do check act loop
+                elif command == "pdca":
+                    on_pdca(instruction, room, event['sender'])
+                # Directly passes the request with no other information in the prompt
+                elif command == "void":
+                    on_void(instruction, room)
+                # Uses a prompt from the DB
+                elif command == "p":
+                    on_prompt(instruction, room, event['sender'])
 
-        if event['content']['body'].startswith("!echo"):
-            response = event['content']['body'][5:]
-            room.send_text(response)
-        try:
-            # Finds the SQL requests to do using context
-            if event['content']['body'].startswith("!dis"):
-                command = event['content']['body'][4:]
-                on_dis(command, room, event['sender'])
-            # Finds the SQL requests to do without using context
-            elif event['content']['body'].startswith("!nc"):
-                command = event['content']['body'][3:]
-                on_dis(command, room, event['sender'], use_context=False)
-            # Implements a plan do check act loop
-            elif event['content']['body'].startswith("!pdca"):
-                command = event['content']['body'][5:]
-                on_pdca(command, room, event['sender'])
-            # Directly passes the request with no other information in the prompt
-            elif event['content']['body'].startswith("!void"):
-                command = event['content']['body'][5:]
-                on_void(command, room)
-        except openai.error.RateLimitError:
-            append_log(f"openai\nRateLimitError", True)
-            write_log()
-        except openai.error.InvalidRequestError as e:
-            append_log(f"openai\nInvalidRequestError: {str(e)}", True)
-            write_log()
+            except openai.error.RateLimitError:
+                append_log(f"openai\nRateLimitError", True)
+                write_log()
+            except openai.error.InvalidRequestError as e:
+                append_log(f"openai\nInvalidRequestError: {str(e)}", True)
+                write_log()
+            except Exception as e:
+                append_log(f"Python exception\nError: {type(e).__name__}: {e}", True)
+                write_log()
+
+        if update_history:
+            conn = sqlite3.connect(bot_log_database)
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO conversation VALUES (?, ?, ?);', (event['origin_server_ts'] // 1000,
+                                                                          event['sender'],
+                                                                          event['content']['body']))
+            conn.commit()
+            conn.close()
+            update_conversation_context()
+        else:
+            print(event)
+            if event['type'] == "m.room.message" and event['sender'].split(":") == "@mind_maker_agent":
+                update_history = True
+
 
 def matrix_bot():
     client = MatrixClient(homeserver_url)
