@@ -508,7 +508,7 @@ def on_void(command, room):
 
 def on_prompt(command, room, sender):
     # Runs a prompt that's from the prompts database
-
+    append_log(f"Instruction: {command}", True)
     prompt_name = command.split(" ")[0]
     conn = sqlite3.connect(bot_log_database)
     cursor = conn.cursor()
@@ -521,7 +521,8 @@ def on_prompt(command, room, sender):
     prompt_context = {
         "instruction": " ".join(command.split(" ")[1:]),
         "username": extract_username(sender),
-        "conversation_context": conversation_context
+        "conversation_context": conversation_context,
+        "db_summary": create_database_summary()
     }
 
     populated_prompt = prompt.format(**prompt_context)
@@ -534,6 +535,7 @@ def on_message(room, event):
     global update_history
     if event['type'] == "m.room.message" and event['content']['msgtype'] == "m.text":
         line = event['content']['body']
+        instruction = line
         if line[0]=="!":
             if line[1]=="!":
                 update_history = False
@@ -576,7 +578,7 @@ def on_message(room, event):
             cursor = conn.cursor()
             cursor.execute('INSERT INTO conversation VALUES (?, ?, ?);', (event['origin_server_ts'] // 1000,
                                                                           event['sender'],
-                                                                          event['content']['body']))
+                                                                          instruction))
             conn.commit()
             conn.close()
             update_conversation_context()

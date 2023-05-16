@@ -4,6 +4,7 @@
   <title>Contenu des tables</title>
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
 </head>
+<a href="/">Retour</a>
 <body>
   {% for table_name, rows in table_data.items() %}
     <h1>{{ table_name }}</h1>
