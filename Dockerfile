@@ -14,6 +14,8 @@ RUN pip install tiktoken
 
 # Create root directory for our project in the container
 RUN mkdir /app
+RUN mkdir /app/data
+RUN mkdir /app/data/agents
 
 # Set the working directory in the container
 WORKDIR /app

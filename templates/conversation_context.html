@@ -5,17 +5,17 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <a href="/">Retour</a>
+    <a href="/bot/{{agent.name}}">Retour</a>
     <h1>Current summary</h1>
       <details class="message-box">
         <p>
-          {{ context[0] }}
+{{ agent.conversation_context[0] }}
         </p>
       </details>
     <h1>Last messages</h1>
       <details class="message-box">
         <p>
-          {{ context[1] }}
+{{ agent.conversation_context[1] }}
         </p>
       </details>
   </body>

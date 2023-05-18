@@ -133,7 +133,7 @@ def show_table_data():
         table_data[table_name] = [dict(row) for row in rows]
 
     conn.close()
-    return render_template('tables.html', table_data=table_data)
+    return render_template('playground.html', table_data=table_data)
 
 @app.route('/bot')
 def bot():
@@ -145,7 +145,7 @@ def bot():
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('agent_home.html')
 
 
 @app.route('/prompts_edit/', methods=['GET', 'POST'])
@@ -235,8 +235,6 @@ def chatgpt_request(prompt):
         for i in range(1,len(bs),2):
             code_blocks.append(bs[i])
     return body, code_blocks
-
-
 
 def on_dis(instruction, room, username, use_context=True):
     global conversation_context
@@ -375,7 +373,6 @@ def format_time_interval(seconds):
             result.append(f"{value} {name}")
     return result[0]
 
-
 def extract_username(s):
     name = s.lstrip("@")
     server = s.split(":")[-1]
@@ -383,7 +380,6 @@ def extract_username(s):
         return name.split(":")[0]
     else:
         return name
-
 
 def context_summarization(page, current_summary):
     if len(current_summary) > 0:
@@ -505,7 +501,6 @@ def on_void(command, room):
     room.send_text(answer)
     write_log()
 
-
 def on_prompt(command, room, sender):
     # Runs a prompt that's from the prompts database
     append_log(f"Instruction: {command}", True)
@@ -586,7 +581,6 @@ def on_message(room, event):
             print(event)
             if event['type'] == "m.room.message" and event['sender'].split(":") == "@mind_maker_agent":
                 update_history = True
-
 
 def matrix_bot():
     client = MatrixClient(homeserver_url)

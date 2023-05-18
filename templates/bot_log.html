@@ -5,12 +5,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-  <a href="/">Retour</a>
+  <a href="/bot/{{agent.name}}">Retour</a>
     <h1>Matrix Bot Messages</h1>
     {% for timestamp, message in messages %}
       <details class="message-box">
-        <summary><time>{{ timestamp }}</time> - {{ message.split('\n', 1)[0] }}</summary>
-        {% for part in message.split('----------') %}
+        <summary><time>{{ timestamp }}</time> - {{ message[0].split('\n', 1)[0] }}</summary>
+        {% for part in message %}
           <div class="message-part">
             {% set first_line, rest = part.strip().split('\n', 1) if '\n' in part.strip() else (part.strip(), '') %}
             <p><strong>{{ first_line }}</strong><br>{{ rest }}</p>
