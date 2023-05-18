@@ -118,7 +118,7 @@ class Agent():
             if ts - previous_ts > 60 and previous_ts > 0:
                 delta = utils.format_time_interval(m[0] - previous_ts)
                 line += f"{delta} later\n"
-            line += f"{name}: {message}\n--\n"
+            line += f"{name}: {message}\n\n"
             message_token_size = len(enc.encode(line))
 
             if token_size + message_token_size > MAX_CONTEXT_SIZE:
@@ -199,6 +199,7 @@ class Agent():
                     prompt_name = command.lstrip("!")
                     self.use_prompt(prompt_name, instruction, room, event['sender'])
 
+                # TODO: afficher un message hors de l'historique quand ces erreurs arrivent
                 except openai.error.RateLimitError:
                     self.append_log(f"openai\nRateLimitError", True)
                 except openai.error.InvalidRequestError as e:
