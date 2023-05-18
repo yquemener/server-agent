@@ -8,7 +8,7 @@ import os.path
 import sqlite3
 from agent import Agent
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect
 from threading import Thread
 
 from utils import db_req
@@ -55,8 +55,19 @@ def init_new_agent(name, matrix_name, channels, description):
         db_req(AGENTS_LIST_DB, "INSERT INTO bots (name, matrix_name, channels, description)"
                                " VALUES (?,?,?,?);",
                (name, matrix_name, json.dumps(channels), description))
-    bots[name] = Agent(f"{AGENTS_HOME}/{name}", name, matrix_name, channels, description)
+    bot = Agent(f"{AGENTS_HOME}/{name}", name, "@mind_maker_agent:matrix.org", channels, description)
+    return bot
 
+
+@app.route("/create_bot", methods=["POST"])
+def create_bot():
+    name = request.form["name"]
+    desc = request.form["description"]
+    room = request.form["room"]
+    bot = init_new_agent(name, "@mind_maker_agent:matrix.org", [room], desc)
+    bots[name] = bot
+    bot.start()
+    return redirect('/')
 
 @app.route('/')
 def home():
@@ -64,7 +75,7 @@ def home():
 
 @app.route('/bot/<name>/<path:remaining_path>', methods=['GET', 'POST'])
 @app.route('/bot/<name>/')
-def bot_handler(name, remaining_path=""):
+def pass_to_bot(name, remaining_path=""):
     return bots[name].handle_request(remaining_path, request)
 
 
@@ -73,6 +84,10 @@ init_new_agent("test_agent",
                ["!KWqtDRucLSHLiihsNl:matrix.org"],
                "Agent used to test prompts.")
 
-bots['test_agent'].start()
+
+for name, channels, description in db_req(AGENTS_LIST_DB, "SELECT name, channels, description FROM bots;"):
+    bot = Agent(f"{AGENTS_HOME}/{name}", name, "@mind_maker_agent:matrix.org", json.loads(channels), description)
+    bots[name] = bot
+    bot.start()
 
 app.run(host='0.0.0.0', port=8080)

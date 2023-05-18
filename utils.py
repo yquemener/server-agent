@@ -41,3 +41,18 @@ def extract_username(s):
         return name.split(":")[0]
     else:
         return name
+
+
+def pprint(l, indent=0):
+    if isinstance(l, list) or isinstance(l, tuple) or isinstance(l, set):
+        for ll in l:
+            pprint(ll, indent+2)
+    elif isinstance(l, dict):
+        for k,v in l.items():
+            if isinstance(v, list) or isinstance(v, tuple) or isinstance(v, set) or isinstance(v, dict):
+                print(f"{indent*' '}{k}:")
+                pprint(v, indent+2)
+            else:
+                print(f"{indent*' '}{k}: {v}")
+    else:
+        print(indent*' '+str(l))

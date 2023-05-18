@@ -207,14 +207,20 @@ class Agent():
                     self.append_log(f"Python exception\nError: {type(e).__name__}: {e}", True)
                 finally:
                     self.write_log()
-        if self.update_history:
-            db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                   (event['origin_server_ts'] // 1000, event['sender'], instruction))
-            self.update_conversation_context()
-        else:
-            print(event)
-            if event['type'] == "m.room.message" and event['sender'].split(":") == "@mind_maker_agent":
-                self.update_history = True
+            if self.update_history:
+                db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                       (event['origin_server_ts'] // 1000, event['sender'], instruction))
+                self.update_conversation_context()
+            else:
+                print(event)
+                if event['type'] == "m.room.message" and event['sender'].split(":") == "@mind_maker_agent":
+                    self.update_history = True
+
+    # Seems to not work anymore? To test on our own homeserver
+    def on_invitation(self, room_id, event):
+        print("Invited!")
+        utils.pprint(event)
+
 
     def prompt_edit(self, form):
         name = form['name']
@@ -267,6 +273,7 @@ class Agent():
         self.client.login(username=self.matrix_name.lstrip("@").split(":")[0],
                           password=C.MATRIX_PASSWORD,
                           sync=True)
+        self.client.add_invite_listener(self.on_invitation)
         for channel in self.channels:
             room = self.client.join_room(channel)
             self.rooms.append(room)

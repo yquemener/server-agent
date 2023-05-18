@@ -10,9 +10,22 @@
   {% for bot_name in bots.keys() %}
       <div class="message-box">
         <a href="/bot/{{bot_name}}">{{ bot_name }}</a>
-          <p></p><small>{{ bots[bot_name].description }}</small></p>
+          <div><small>{{ bots[bot_name].description }}</small></div>
+          <div><small>Present in rooms {{ bots[bot_name].channels }}</small></div>
       </div>
   {% endfor %}
+  <h2>Create a New Bot</h2>
+  <form method="POST" action="/create_bot">
+    <label for="name">Name:</label>
+    <input type="text" name="name" id="name" required><br>
 
+    <label for="description">Description:</label>
+    <input type="text" name="description" id="description" required><br>
+
+    <label for="room">Room to Join:</label>
+    <input type="text" name="room" id="room" required><br>
+
+    <input type="submit" value="Add">
+  </form>
 </body>
 </html>
