@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Creates the container
-docker build -t culture-matrix-server
+docker build -t culture-matrix-server .
 
 # Generate configuration files
 docker run -it --rm \
