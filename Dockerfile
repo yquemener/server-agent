@@ -24,5 +24,5 @@ WORKDIR /app
 COPY . /app/
 
 # Start up Nginx server
-CMD ["python", "bot_and_web.py"]
+CMD ["python", "main.py"]
 
