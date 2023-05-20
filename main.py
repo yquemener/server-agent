@@ -57,7 +57,7 @@ def create_bot():
     name = request.form["name"]
     desc = request.form["description"]
     room = request.form["room"]
-    bot = init_new_agent(name, C.AGENT_USERNAME, [room], desc)
+    bot = init_new_agent(name, C.AGENT_USERNAME, [room], desc, avatar=f"{C.ROOT_DIR}/pictures/portrait1.jpg")
     agents[name] = bot
     bot.start()
     return redirect('/')
