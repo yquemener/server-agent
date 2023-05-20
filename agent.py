@@ -310,5 +310,7 @@ class Agent():
             mxc_url = response #['content_uri']  # Get the Matrix content URI
             self.client.api.set_avatar_url(self.matrix_name, mxc_url)  # Set the avatar
 
+        self.client.start_listener_thread()
+
 
 
