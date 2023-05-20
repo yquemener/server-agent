@@ -274,6 +274,7 @@ class Agent():
                 self.conversation_summary = (-1, "")
                 self.update_conversation_context()
             return render_template('conversation_context.html', agent=self)
+
         abort(404)
 
     def start(self):
@@ -282,11 +283,13 @@ class Agent():
                           sync=True)
         self.client.add_invite_listener(self.on_invitation)
         for channel in self.channels:
+            if channel.endswith("matrix.org"):
+                continue
             room = self.client.join_room(channel)
             self.rooms.append(room)
             room.send_text(f"Hi! Logs available at {C.HOSTNAME}")
             room.add_listener(self.on_message)
-            self.client.start_listener_thread()
+        self.client.start_listener_thread()
 
 
 
