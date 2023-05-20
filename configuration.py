@@ -11,5 +11,6 @@ try:
     HOSTNAME = "http://127.0.0.1:8080"
 except FileNotFoundError:
     openai.api_key = open("/app/keys/openAIAPI", "r").read().rstrip("\n")
-    MATRIX_PASSWORD = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
+    # MATRIX_PASSWORD = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
+    MATRIX_PASSWORD = "dbguser1"
     HOSTNAME = "http://agent.iv-labs.org"
