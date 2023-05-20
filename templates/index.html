@@ -1,31 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Accueil</title>
-  <link rel="stylesheet" type="text/css" href="/static/styles.css">
+  <meta charset="UTF-8">
+  <title>Bot {{name}}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <h1>Bots actifs</h1>
-
-  {% for bot_name in bots.keys() %}
-      <div class="message-box">
-        <a href="/bot/{{bot_name}}">{{ bot_name }}</a>
-          <div><small>{{ bots[bot_name].description }}</small></div>
-          <div><small>Present in rooms {{ bots[bot_name].channels }}</small></div>
-      </div>
-  {% endfor %}
-  <h2>Create a New Bot</h2>
-  <form method="POST" action="/create_bot">
-    <label for="name">Name:</label>
-    <input type="text" name="name" id="name" required><br>
-
-    <label for="description">Description:</label>
-    <input type="text" name="description" id="description" required><br>
-
-    <label for="room">Room to Join:</label>
-    <input type="text" name="room" id="room" required><br>
-
-    <input type="submit" value="Add">
-  </form>
+  <h1>Bot {{name}}</h1>
+  <h2>Joined Rooms</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Room ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for room_id, room in joined_rooms.items() %}
+        <tr>
+          <td><a href="/agent/{{room_id}}">{{ room.name }}</a></td>
+          <td><a href="/agent/{{room_id}}">{{ room_id }}</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h2>Paramètres</h2>
+  <div class="message-box">
+    <a href="prompts_edit">Éditer les prompts</a>
+  </div>
 </body>
 </html>

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Matrix Bot Conversation context</title>
+    <title>Agent {{name}} Conversation context</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <a href="/bot/{{ agent.name }}">Retour</a>
+    <a href="/agent/{{ name }}">Retour</a>
     <h1>Current summary</h1>
     <button onclick="resetConversation()">Reset</button>
     <details class="message-box" open="open">
@@ -21,7 +21,7 @@
     </details>
     <script>
       function resetConversation() {
-        fetch('/bot/{{ agent.name }}/conversation_context/reset', { method: 'POST' })
+        fetch('/agent/{{ name }}/conversation_context/reset', { method: 'POST' })
           .then(response => {
             if (response.ok) {
               location.reload();

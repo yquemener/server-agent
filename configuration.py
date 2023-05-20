@@ -10,17 +10,15 @@ if os.path.exists(DOCKER_ROOT_DIR):
 else:
     ROOT_DIR = "/home/yves/AI/Culture/server-agent/data/"
 
-AGENTS_LIST_DB = f"{ROOT_DIR}/agents.db"
+BOT_DB = f"{ROOT_DIR}/bot.db"
 AGENTS_HOME = f"{ROOT_DIR}/agents/"
-AGENT_USERNAME = "@dbguser1:matrix.iv-labs.org"
+BOT_USERNAME = "@mind_maker_bot:matrix.iv-labs.org"
 
 try:
     openai.api_key = open("/home/yves/keys/openAIAPI", "r").read().rstrip("\n")
-    # MATRIX_PASSWORD = open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
-    MATRIX_PASSWORD = "dbguser1"
+    MATRIX_PASSWORD = open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
     HOSTNAME = "http://127.0.0.1:8080"
 except FileNotFoundError:
     openai.api_key = open("/app/keys/openAIAPI", "r").read().rstrip("\n")
-    # MATRIX_PASSWORD = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
-    MATRIX_PASSWORD = "dbguser1"
+    MATRIX_PASSWORD = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
     HOSTNAME = "http://agent.iv-labs.org"

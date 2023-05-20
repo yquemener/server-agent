@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Matrix Bot Messages</title>
+    <title>Agent {{name}} Messages</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-  <a href="/bot/{{agent.name}}">Retour</a>
-    <h1>Matrix Bot Messages</h1>
+  <a href="/agent/{{name}}">Retour</a>
+    <h1>Agent {{name}} Messages</h1>
     {% for timestamp, message in messages %}
       <details class="message-box">
         <summary><time>{{ timestamp }}</time> - {{ message[0].split('\n', 1)[0] }}</summary>

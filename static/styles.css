@@ -34,7 +34,6 @@ h1 {
 
 table {
   border-collapse: collapse;
-  width: 100%;
 }
 
 table th,
@@ -47,4 +46,6 @@ table tr:nth-child(even) {
   background-color: #f9f9f9;
 }
 
-textarea { height: auto; }
+textarea {
+  height: auto;
+}

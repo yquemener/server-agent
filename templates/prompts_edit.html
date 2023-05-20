@@ -12,9 +12,9 @@
   </script>
 </head>
 <body>
-<a href="/bot/{{agent.name}}">Retour</a>
+<a href="/">Retour</a>
   <h1>Edit Prompts</h1>
-  <form action="/bot/{{agent.name}}/prompts_edit/" method="post">
+  <form action="/prompts_edit" method="post">
     <div>
       <label for="name">Name:</label>
       <input type="text" id="name" name="name">
@@ -35,7 +35,7 @@
     <div class="message-part">
       <p>{{ prompt[1] | safe }}</p>
     </div>
-    <form action="/bot/{{agent.name}}/prompts_edit/" method="post">
+    <form action="/prompts_edit" method="post">
       <input type="hidden" name="name" value="{{ prompt[0] }}">
       <input type="hidden" name="prompt" value="{{ prompt[1] }}">
       <input type="submit" name="delete_prompt" value="Delete Prompt">

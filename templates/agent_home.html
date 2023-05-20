@@ -6,21 +6,17 @@
 </head>
 <body>
 <a href="/">Retour</a>
-  <h1>Bot {{agent.name}}</h1>
+  <h1>Bot {{name}}</h1>
   <div class="message-box">
-    <a href="chatlogs">Conversations</a>
+    <a href="/agent/{{name}}/logs">Conversations</a>
   </div>
 
   <div class="message-box">
-    <a href="playground">Tables de l'agent</a>
+    <a href="/agent/{{name}}/playground">Tables de l'agent</a>
   </div>
 
   <div class="message-box">
-    <a href="conversation_context">Context courant</a>
-  </div>
-
-  <div class="message-box">
-    <a href="prompts_edit">Éditer les prompts</a>
+    <a href="/agent/{{name}}/conversation_context">Context courant</a>
   </div>
 </body>
 </html>

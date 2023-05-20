@@ -52,10 +52,10 @@ def create_user(server_url, admin_token, username, password):
 
 # Usage
 u=create_user(
-    server_url="http://matrix.iv-labs.org:8008",
+    server_url="https://matrix.iv-labs.org:8448",
     admin_token=open("/home/yves/keys/MatrixHomeserverAdminToken", "r").read().strip(),
-    username="dbguser3",
-    password="dbguser3",
+    username="mind_maker_bot",
+    password=open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n"),
 )
 
 print(u)

@@ -23,25 +23,18 @@ from utils import db_req
 import configuration as C
 
 
-class Agent():
-    def __init__(self, home_folder, name, matrix_name, channels=[], description="", avatar=None):
-        self.home_folder = home_folder
-        self.name = name
-        self.matrix_name = matrix_name
-        self.channels = channels
-        self.description = description
-        self.avatar = avatar
+class Agent:
+    def __init__(self, room, bot):
+        self.bot = bot
+        self.room = room
 
         self.conversation_summary = (-1, "")  # (timestamp of last summed up message, summary)
         self.conversation_context = ["", ""]
         self.current_log = []
         self.update_history = True
 
-        self.system_db_name = f"{home_folder}/system.db"
-        self.playground_db_name = f"{home_folder}/playground.db"
-
-        self.client = MatrixClient(C.HOMESERVER_URL)
-        self.rooms = list()
+        self.system_db_name = f"agent_{room.room_id}.db"
+        self.playground_db_name = f"agent_playground_{room.room_id}.db"
 
         db_req(self.system_db_name, '''
             CREATE TABLE IF NOT EXISTS bot_log (
@@ -61,7 +54,6 @@ class Agent():
                 message TEXT NOT NULL
             );
         ''')
-        db_req(self.system_db_name, "CREATE TABLE IF NOT EXISTS prompts (name TEXT, prompt TEXT)")
 
         result = db_req(self.system_db_name,
                         "SELECT * FROM conversation_summary ORDER BY timestamp DESC LIMIT 1;")
@@ -79,6 +71,7 @@ class Agent():
         self.current_log = []
 
     def context_summarization(self, page, previous_summary):
+        # TODO: Replace that by a prompt acquired from the prompts table
         if len(previous_summary) > 0:
             prompt = f"""\
             Please provide a new summary of the conversation. The summary should be succinct and include all the important information given in the conversation.  
@@ -167,7 +160,7 @@ class Agent():
     def use_prompt(self, prompt_name, command, room, sender):
         # Runs a prompt that's from the prompts database
         self.append_log(f"Instruction: {prompt_name} {command}", True)
-        prompt = db_req(self.system_db_name,
+        prompt = db_req(self.bot.bot_db,
                         'SELECT prompt FROM prompts WHERE name = ?;', (prompt_name,))
         if len(prompt) == 0:
             return
@@ -182,7 +175,7 @@ class Agent():
         answer, codes = self.chatgpt_request(populated_prompt)
         room.send_text(answer)
 
-    def on_message(self, room, event):
+    def on_message(self, event):
         print(event)
         try:
             if event['type'] == "m.room.message" and event['content']['msgtype'] == "m.text":
@@ -197,12 +190,12 @@ class Agent():
                     command = args[0].lstrip("!")
                     instruction = " ".join(args[1:])
                     if command == "echo":
-                        room.send_text(instruction)
+                        self.room.send_text(instruction)
                     try:
                         prompt_name = command.lstrip("!")
-                        self.use_prompt(prompt_name, instruction, room, event['sender'])
+                        self.use_prompt(prompt_name, instruction, self.room, event['sender'])
 
-                    # TODO: afficher un message hors de l'historique quand ces erreurs arrivent
+                    # TODO: afficher un message hors de l'historique quand ces erreurs arrivent:
                     except openai.error.RateLimitError:
                         self.append_log(f"openai\nRateLimitError", True)
                     except openai.error.InvalidRequestError as e:
@@ -221,95 +214,6 @@ class Agent():
                         self.update_history = True
         except Exception as e:
             self.append_log(f"Python exception\nError: {type(e).__name__}: {e}", True)
-
-    def on_invitation(self, room_id, event):
-        print(f"Invited in {room_id}!")
-        utils.pprint(event)
-        try:
-            room = self.client.join_room(room_id)  # Automatically join the invited room
-            print(f"Joined room: {room_id}")
-            room.add_listener(self.on_message)
-            self.rooms.append(room)
-            self.channels.append(room_id)
-        except Exception as e:
-            print(f"Failed to join room: {room_id}")
-            print(e)
-
-
-    def prompt_edit(self, form):
-        name = form['name']
-        prompt = form['prompt']
-        if 'delete_prompt' in form:
-            db_req(self.system_db_name, "DELETE FROM prompts WHERE name=?",
-                   (form["name"],))
-        else:
-            existing = db_req(self.system_db_name, "SELECT name FROM prompts WHERE name=?",
-                              (form["name"],))
-
-            if existing:
-                db_req(self.system_db_name, "UPDATE prompts SET prompt=? WHERE name=?",
-                       (prompt, name))
-            else:
-                db_req(self.system_db_name,
-                       "INSERT INTO prompts (name, prompt) VALUES (?, ?)",
-                       (name, prompt))
-
-    def handle_request(self, path, request):
-        print(path)
-        if path == "/" or path == "":
-            return render_template('agent_home.html', agent=self)
-        elif path == "playground":
-            return render_template('playground.html', agent=self, table_data=[])
-        elif path.startswith("chatlogs"):
-            log = db_req(self.system_db_name, "SELECT timestamp, message FROM bot_log ORDER BY timestamp DESC;")
-            messages = list()
-            for m in log:
-                if len(json.loads(m[1])) == 0:
-                    continue
-                messages.append((m[0], json.loads(m[1])))
-            return render_template('bot_log.html', agent=self, messages=messages)
-        elif path.startswith("prompts_edit"):
-            if request.method == 'POST':
-                self.prompt_edit(request.form)
-            rows = db_req(self.system_db_name, "SELECT name, prompt FROM prompts")
-            prompts = list()
-            for r in rows:
-                prompt = re.sub(r'\r?\n', '<br>', r[1])
-                prompt = re.sub(r'\'', '\\\'', prompt)
-                prompts.append((r[0], prompt))
-            return render_template('prompts_edit.html', agent=self, prompts=prompts)
-
-        elif path.startswith("conversation_context"):
-            if path.startswith("conversation_context/reset"):
-                print("reset")
-                db_req(self.system_db_name, "DELETE FROM conversation;")
-                self.conversation_context = ("", "")
-                self.conversation_summary = (-1, "")
-                self.update_conversation_context()
-            return render_template('conversation_context.html', agent=self)
-
-        abort(404)
-
-    def start(self):
-        self.client.login(username=self.matrix_name.lstrip("@").split(":")[0],
-                          password=C.MATRIX_PASSWORD,
-                          sync=True)
-        self.client.add_invite_listener(self.on_invitation)
-        for channel in self.channels:
-            if channel.endswith("matrix.org"):
-                continue
-            room = self.client.join_room(channel)
-            self.rooms.append(room)
-            room.send_text(f"Hi! Logs available at {C.HOSTNAME}")
-            room.add_listener(self.on_message)
-        # # Set profile picture
-        # with open(self.avatar, 'rb') as f:
-        #     response = self.client.upload(f.read(), 'image/jpeg')  # Upload the image
-        #     print(response)
-        #     mxc_url = response #['content_uri']  # Get the Matrix content URI
-        #     self.client.api.set_avatar_url(self.matrix_name, mxc_url)  # Set the avatar
-
-        self.client.start_listener_thread()
 
 
 
