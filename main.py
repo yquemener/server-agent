@@ -36,8 +36,6 @@ import configuration as C
 
 # TODO: Empêcher le bot de refaire toutes les instructions passés après un join (sync=False?)
 # TODO: Reactivate the avatar change but as an option in the web interface
-# TODO: Mettre à jour la table des rooms rejointes lors d'une invitation
-# TODO: afficher le nom des rooms au lieu de juste leur adresse dans la page principale
 
 class Bot:
     def __init__(self, bot_db_path):

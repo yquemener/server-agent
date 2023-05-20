@@ -33,7 +33,7 @@ class Agent:
         self.current_log = []
         self.update_history = True
 
-        self.system_db_name = f"agent_{room.room_id}.db"
+        self.system_db_name = f"{C.ROOT_DIR}/agent_{room.room_id}.db"
         self.playground_db_name = f"agent_playground_{room.room_id}.db"
 
         db_req(self.system_db_name, '''
