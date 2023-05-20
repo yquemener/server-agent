@@ -14,7 +14,7 @@ import time
 
 import openai
 import tiktoken
-from flask import render_template, abort
+from flask import render_template, abort, redirect
 from matrix_client.client import MatrixClient
 
 import utils
@@ -266,7 +266,13 @@ class Agent():
                 prompts.append((r[0], prompt))
             return render_template('prompts_edit.html', agent=self, prompts=prompts)
 
-        elif path == "conversation_context":
+        elif path.startswith("conversation_context"):
+            if path.startswith("conversation_context/reset"):
+                print("reset")
+                db_req(self.system_db_name, "DELETE FROM conversation;")
+                self.conversation_context = ("", "")
+                self.conversation_summary = (-1, "")
+                self.update_conversation_context()
             return render_template('conversation_context.html', agent=self)
         abort(404)
 

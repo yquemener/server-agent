@@ -5,18 +5,34 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <a href="/bot/{{agent.name}}">Retour</a>
+    <a href="/bot/{{ agent.name }}">Retour</a>
     <h1>Current summary</h1>
-      <details class="message-box">
-        <p>
-{{ agent.conversation_context[0] }}
-        </p>
-      </details>
+    <button onclick="resetConversation()">Reset</button>
+    <details class="message-box" open="open">
+      <p>
+        {{ agent.conversation_context[0] }}
+      </p>
+    </details>
     <h1>Last messages</h1>
-      <details class="message-box">
-        <p>
-{{ agent.conversation_context[1] }}
-        </p>
-      </details>
+    <details class="message-box" open="open">
+      <p>
+        {{ agent.conversation_context[1] }}
+      </p>
+    </details>
+    <script>
+      function resetConversation() {
+        fetch('/bot/{{ agent.name }}/conversation_context/reset', { method: 'POST' })
+          .then(response => {
+            if (response.ok) {
+              location.reload();
+            } else {
+              console.error('Failed to reset conversation context.');
+            }
+          })
+          .catch(error => {
+            console.error('An error occurred:', error);
+          });
+      }
+    </script>
   </body>
 </html>
