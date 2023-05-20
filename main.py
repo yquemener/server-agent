@@ -15,6 +15,12 @@ from utils import db_req
 import configuration as C
 
 
+# TODO: Empêcher le bot de refaire toutes les instructions passés après un join (sync=False?)
+# TODO: Mettre un meilleur username
+# TODO: Reactivate the avatar change but as an option in the web interface
+# TODO: Mettre à jour la table des rooms rejointes lors d'une invitation
+# TODO: afficher le nom des rooms au lieu de juste leur adresse dans la page principale
+
 # AGENT_USERNAME = "@mind_maker_agent:matrix.org"
 
 db_req(C.AGENTS_LIST_DB, '''

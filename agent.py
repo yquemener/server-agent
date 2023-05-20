@@ -302,13 +302,12 @@ class Agent():
             self.rooms.append(room)
             room.send_text(f"Hi! Logs available at {C.HOSTNAME}")
             room.add_listener(self.on_message)
-        # Set profile picture
-        # Upload the avatar image and set it as the avatar
-        with open(self.avatar, 'rb') as f:
-            response = self.client.upload(f.read(), 'image/jpeg')  # Upload the image
-            print(response)
-            mxc_url = response #['content_uri']  # Get the Matrix content URI
-            self.client.api.set_avatar_url(self.matrix_name, mxc_url)  # Set the avatar
+        # # Set profile picture
+        # with open(self.avatar, 'rb') as f:
+        #     response = self.client.upload(f.read(), 'image/jpeg')  # Upload the image
+        #     print(response)
+        #     mxc_url = response #['content_uri']  # Get the Matrix content URI
+        #     self.client.api.set_avatar_url(self.matrix_name, mxc_url)  # Set the avatar
 
         self.client.start_listener_thread()
 
