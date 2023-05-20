@@ -217,10 +217,18 @@ class Agent():
                 if event['type'] == "m.room.message" and event['sender'].split(":") == "@mind_maker_agent":
                     self.update_history = True
 
-    # Seems to not work anymore? To test on our own homeserver
     def on_invitation(self, room_id, event):
-        print("Invited!")
+        print(f"Invited in {room_id}!")
         utils.pprint(event)
+        try:
+            room = self.client.join_room(room_id)  # Automatically join the invited room
+            print(f"Joined room: {room_id}")
+            room.add_listener(self.on_message)
+            self.rooms.append(room)
+            self.channels.append(room_id)
+        except Exception as e:
+            print(f"Failed to join room: {room_id}")
+            print(e)
 
 
     def prompt_edit(self, form):
