@@ -13,6 +13,7 @@ import textwrap
 import time
 
 import openai
+import requests
 import tiktoken
 from flask import render_template, abort, redirect
 from matrix_client.client import MatrixClient
@@ -23,12 +24,13 @@ import configuration as C
 
 
 class Agent():
-    def __init__(self, home_folder, name, matrix_name, channels=[], description=""):
+    def __init__(self, home_folder, name, matrix_name, channels=[], description="", avatar=None):
         self.home_folder = home_folder
         self.name = name
         self.matrix_name = matrix_name
         self.channels = channels
         self.description = description
+        self.avatar = avatar
 
         self.conversation_summary = (-1, "")  # (timestamp of last summed up message, summary)
         self.conversation_context = ["", ""]
@@ -300,7 +302,13 @@ class Agent():
             self.rooms.append(room)
             room.send_text(f"Hi! Logs available at {C.HOSTNAME}")
             room.add_listener(self.on_message)
-        self.client.start_listener_thread()
+        # Set profile picture
+        # Upload the avatar image and set it as the avatar
+        with open(self.avatar, 'rb') as f:
+            response = self.client.upload(f.read(), 'image/jpeg')  # Upload the image
+            print(response)
+            mxc_url = response #['content_uri']  # Get the Matrix content URI
+            self.client.api.set_avatar_url(self.matrix_name, mxc_url)  # Set the avatar
 
 
 
