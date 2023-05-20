@@ -8,7 +8,7 @@ import os.path
 import sqlite3
 from agent import Agent
 
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, abort
 from threading import Thread
 
 from utils import db_req
@@ -77,7 +77,10 @@ def home():
 @app.route('/bot/<name>/<path:remaining_path>', methods=['GET', 'POST'])
 @app.route('/bot/<name>/')
 def pass_to_bot(name, remaining_path=""):
-    return agents[name].handle_request(remaining_path, request)
+    try:
+        return agents[name].handle_request(remaining_path, request)
+    except:
+        return abort(501)
 
 
 # init_new_agent("dbg_agent",
