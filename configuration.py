@@ -8,10 +8,10 @@ DOCKER_ROOT_DIR = "/app/db/"
 if os.path.exists(DOCKER_ROOT_DIR):
     ROOT_DIR = DOCKER_ROOT_DIR
 else:
-    ROOT_DIR = "/home/yves/AI/Culture/server-agent/"
+    ROOT_DIR = "/home/yves/AI/Culture/server-agent/data/"
 
-AGENTS_LIST_DB = f"{ROOT_DIR}/data/agents.db"
-AGENTS_HOME = f"{ROOT_DIR}/data/agents/"
+AGENTS_LIST_DB = f"{ROOT_DIR}/agents.db"
+AGENTS_HOME = f"{ROOT_DIR}/agents/"
 AGENT_USERNAME = "@dbguser1:matrix.iv-labs.org"
 
 try:
