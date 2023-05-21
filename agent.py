@@ -25,6 +25,7 @@ import configuration as C
 
 class Agent:
     def __init__(self, room, bot):
+        self.first_ts = -1
         self.bot = bot
         self.room = room
 
@@ -176,7 +177,9 @@ class Agent:
         room.send_text(answer)
 
     def on_message(self, event):
-        print(event)
+        if event["origin_server_ts"] < self.first_ts:
+            print("Ignored")
+            return
         try:
             if event['type'] == "m.room.message" and event['content']['msgtype'] == "m.text":
                 line = event['content']['body']

@@ -24,7 +24,9 @@ Databases:
 import json
 import re
 from matrix_client.client import MatrixClient
+from time import sleep
 
+import utils
 from agent import Agent
 
 from flask import Flask, render_template, request, redirect, abort
@@ -42,6 +44,7 @@ class Bot:
         self.bot_db = bot_db_path
         self.client = None
         self.agents = dict()
+        self.first_ts = -1
 
         db_req(self.bot_db, '''
             CREATE TABLE IF NOT EXISTS prompts (
@@ -55,12 +58,23 @@ class Bot:
 
     def on_invitation(self, room_id, event):
         print(f"Invited in {room_id}!")
+        sleep(1)
         try:
             room = self.client.join_room(room_id)
             print(f"Joined room: {room_id}")
+            self.agents[room_id] = Agent(room, self)
+            if type(event) is not str:
+                for e in event["events"]:
+                    ts = e.get("origin_server_ts", -1)
+                    if ts > self.agents[room_id].first_ts:
+                        self.agents[room_id].first_ts = ts
+            else:
+                self.agents[room_id].first_ts = event.get("origin_server_ts",
+                                                          self.agents[room_id].first_ts)
+            # self.agents[room_id].first_ts = event["origin_server_ts"]
             room.send_text(f"Hi! Logs available at {C.HOSTNAME}")
             room.add_listener(self.on_message)
-            self.agents[room_id] = Agent(room, self)
+
         except Exception as e:
             print(f"Failed to join room: {room_id}")
             print(e)
@@ -75,8 +89,12 @@ class Bot:
         # Listens to new invitation
         self.client.add_invite_listener(self.on_invitation)
 
+        # Starts the Matrix bot mainloop in a different thread
+        self.client.start_listener_thread()
+
         # Initialize listeners on already joined rooms
-        self.client._sync()
+        self.client.api.sync()
+        sleep(1)
         joined_rooms = self.client.rooms
         print("Joined rooms:")
         for room_id, room in joined_rooms.items():
@@ -84,8 +102,8 @@ class Bot:
             room.add_listener(self.on_message)
             self.agents[room_id] = Agent(room, self)
 
-        # Starts the Matrix bot mainloop in a different thread
-        self.client.start_listener_thread()
+
+
 
 # Now initializing the web server
 app = Flask(__name__)
