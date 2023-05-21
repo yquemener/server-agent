@@ -12,12 +12,14 @@
       <p>
 {{ agent.conversation_context[0] }}
       </p>
+        <small>{{sizes[0]}} tokens</small>
     </details>
     <h1>Last messages</h1>
     <details class="message-box" open="open">
       <p>
 {{ agent.conversation_context[1] }}
       </p>
+        <small>{{sizes[1]}} tokens</small>
     </details>
     <script>
       function resetConversation() {

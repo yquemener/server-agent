@@ -23,6 +23,8 @@ Databases:
 """
 import json
 import re
+
+import tiktoken
 from matrix_client.client import MatrixClient
 from time import sleep
 
@@ -36,7 +38,6 @@ from utils import db_req
 import configuration as C
 
 
-# TODO: Empêcher le bot de refaire toutes les instructions passés après un join (sync=False?)
 # TODO: Reactivate the avatar change but as an option in the web interface
 
 class Bot:
@@ -108,6 +109,7 @@ class Bot:
 # Now initializing the web server
 app = Flask(__name__)
 
+encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
 @app.route('/')
 def home():
     return render_template('index.html', joined_rooms=bot.client.rooms,
@@ -153,7 +155,9 @@ def conversation_logs(room_id):
 @app.route('/agent/<room_id>/conversation_context')
 def conversation_context(room_id):
     print(bot.agents)
-    return render_template('conversation_context.html', name=room_id, agent=bot.agents[room_id])
+    size0 = len(encoder.encode(bot.agents[room_id].conversation_context[0]))
+    size1 = len(encoder.encode(bot.agents[room_id].conversation_context[1]))
+    return render_template('conversation_context.html', name=room_id, agent=bot.agents[room_id], sizes=(size0, size1))
 
 @app.route('/agent/<room_id>/conversation_context/reset', methods=["POST"])
 def conversation_context_reset(room_id):

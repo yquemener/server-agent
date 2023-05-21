@@ -2,7 +2,7 @@
 An agent is a matrix bot that has its own context and database. It lives in a separate thread. For now it can only
 be in a single matrix room at the time but the plan is that they can each have a presence in several.
 
-- TODO Have several joined discussion per agent
+- TODO Have several joined discussion per agent (do we really want it?)
 - TODO find a way to make it work on encrypted channels
 
 """
@@ -185,6 +185,8 @@ class Agent:
                 line = event['content']['body']
                 instruction = line
                 if instruction[0] == "!":
+                    self.bot. client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
+                                               {"typing": True, "timeout": 30000})
                     if instruction[1] == "!":
                         self.update_history = False
                     else:
@@ -198,13 +200,18 @@ class Agent:
                         prompt_name = command.lstrip("!")
                         self.use_prompt(prompt_name, instruction, self.room, event['sender'])
 
-                    # TODO: afficher un message hors de l'historique quand ces erreurs arrivent:
                     except openai.error.RateLimitError:
                         self.append_log(f"openai\nRateLimitError", True)
+                        self.update_history = False
+                        self.room.send_text("OpenAI RateLimitError (Open source: quand??)")
                     except openai.error.InvalidRequestError as e:
                         self.append_log(f"openai\nInvalidRequestError: {str(e)}", True)
+                        self.update_history = False
+                        self.room.send_text("OpenAI InvalidRequestError (Probablement une erreur de programmation/prompt)")
                     except Exception as e:
                         self.append_log(f"Python exception\nError: {type(e).__name__}: {e}", True)
+                        self.room.send_text(f"Python exception\nError: {type(e).__name__}: {e}")
+                        self.update_history = False
                     finally:
                         self.write_log()
                 if self.update_history:
@@ -217,6 +224,10 @@ class Agent:
                         self.update_history = True
         except Exception as e:
             self.append_log(f"Python exception\nError: {type(e).__name__}: {e}", True)
-
-
-
+        finally:
+            try:
+                self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
+                                          {"typing": False, "timeout": 3000})
+                pass
+            except:
+                pass
