@@ -6,6 +6,7 @@
 </head>
 <a href="/agent/{{name}}">Retour</a>
 <body>
+<button onclick="resetConversation()">Reset</button>
   {% for table_name, rows in table_data.items() %}
     <h1>{{ table_name }}</h1>
     {% if rows %}
@@ -27,5 +28,20 @@
       <p>Aucune donnée disponible pour cette table.</p>
     {% endif %}
   {% endfor %}
+    <script>
+      function resetConversation() {
+        fetch('/agent/{{ name }}/playground/reset', { method: 'POST' })
+          .then(response => {
+            if (response.ok) {
+              location.reload();
+            } else {
+              console.error('Failed to reset conversation context.');
+            }
+          })
+          .catch(error => {
+            console.error('An error occurred:', error);
+          });
+      }
+    </script>
 </body>
 </html>

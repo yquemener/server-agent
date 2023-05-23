@@ -12,6 +12,8 @@ else:
 BOT_DB = f"{ROOT_DIR}/bot.db"
 AGENTS_HOME = f"{ROOT_DIR}/agents/"
 
+LOG_ROOM = "!ezhJHIWSMUNzYznSQo:matrix.org"
+
 try:
     openai.api_key = open("/home/yves/keys/openAIAPI", "r").read().rstrip("\n")
     BOT_USERNAME = "@mind_maker_bot_local:matrix.iv-labs.org"

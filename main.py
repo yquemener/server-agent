@@ -31,18 +31,16 @@ from time import sleep
 import utils
 from agent import Agent
 
-from flask import Flask, render_template, request, redirect, abort
+from flask import Flask, render_template, request, redirect, abort, make_response
 from threading import Thread
 
 from utils import db_req
 import configuration as C
 
 
-# TODO: Design prompts chaining
+# TODO: retry on OpenAI error
 # TODO: The summarization prompt should be acquired from the prompts table and should be agent specific
 # TODO: Make listener mode where the agent listens to a conversation and sums it up on demand
-# TODO: Restore context even for the first request
-# TODO: Bouton HTML pour effacer la DB playground
 # TODO: Reactivate the avatar change but as an option in the web interface
 # TODO nginx redirect from 80 (and https) to 8448 (so that the server url is https://matrix.iv-labs.org instead
 #  of http://matrix.iv-labs.org:8448)
@@ -52,10 +50,12 @@ import configuration as C
 
 class Bot:
     def __init__(self, bot_db_path):
+        self.log_room = None
         self.bot_db = bot_db_path
         self.client = None
         self.agents = dict()
         self.first_ts = -1
+        self.name = utils.extract_username(C.BOT_USERNAME)
 
         db_req(self.bot_db, '''
             CREATE TABLE IF NOT EXISTS prompts (
@@ -110,8 +110,11 @@ class Bot:
         print("Joined rooms:")
         for room_id, room in joined_rooms.items():
             print(f"- {room.name}")
-            room.add_listener(self.on_message)
-            self.agents[room_id] = Agent(room, self)
+            if room_id == C.LOG_ROOM:
+                self.log_room = room
+            else:
+                room.add_listener(self.on_message)
+                self.agents[room_id] = Agent(room, self)
 
 
 
@@ -174,6 +177,14 @@ def show_playground(room_id):
         table_data[table_name] = [dict(row) for row in rows]
     return render_template('playground.html', table_data=table_data,
                            name=room_id)
+
+@app.route('/agent/<room_id>/playground/reset', methods=["POST"])
+def reset_playground(room_id):
+    tables = db_req(bot.agents[room_id].playground_db_name, f"SELECT name FROM sqlite_master WHERE type='table';")
+    for table in tables:
+        table_name = table[0]
+        db_req(bot.agents[room_id].playground_db_name, f"DROP TABLE IF EXISTS {table_name};")
+    return make_response("",200)
 
 @app.route('/agent/<room_id>/conversation_context')
 def conversation_context(room_id):

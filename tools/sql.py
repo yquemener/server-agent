@@ -10,18 +10,18 @@ class SqlModule:
         try:
             conn = sqlite3.connect(self.db_file)
             c = conn.cursor()
-            results = ""
+            ret = []
             for i, query in enumerate(queries.strip().split(";")[:-1]):
                 try:
-                    query = query.strip()
+                    query = query.strip() + ";"
                     c.execute(query)
                     conn.commit()
                     result = c.fetchall()
-                    results += f"Query:{query}\nResult:{str(result)}\n\n"
+                    ret.append((query, result))
                 except sqlite3.Error as e:
-                    results += f"Query:{query}\nResult: Error\n\n"
+                    ret.append((query, f"{type(e).__name__}: {e}"))
             conn.close()
-            return results
+            return ret
         except Exception as e:
             print(f"T'as merdé mon grand: {e}")
         return

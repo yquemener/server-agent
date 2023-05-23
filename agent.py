@@ -9,6 +9,7 @@ import re
 import sqlite3
 import textwrap
 import time
+import traceback
 
 import openai
 import requests
@@ -34,7 +35,7 @@ class Agent:
         self.update_history = True
 
         self.system_db_name = f"{C.ROOT_DIR}/agent_{room.room_id}.db"
-        self.playground_db_name = f"agent_playground_{room.room_id}.db"
+        self.playground_db_name = f"{C.ROOT_DIR}/agent_playground_{room.room_id}.db"
 
         db_req(self.system_db_name, '''
             CREATE TABLE IF NOT EXISTS bot_log (
@@ -139,7 +140,10 @@ class Agent:
             d = json.loads(s)
             if d["type"]=="matrix":
                 return d["type"], d["content"], ""
-            answer = self.tools[d["type"]].execute_query(d["content"])
+            content = d["content"]
+            if type(content) is list:
+                content = "\n".join(content)
+            answer = self.tools[d["type"]].execute_query(content)
             return d["type"], d["content"], answer
         except:
             return
@@ -176,7 +180,7 @@ class Agent:
     def use_prompt(self, prompt_name, command, room, sender, ts, recursion=0):
         self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
                                   {"typing": True, "timeout": 30000})
-        if recursion > 10:
+        if recursion > 6:
             room.send_text("Recursion limit reached")
             self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
                                       {"typing": False, "timeout": 3000})
@@ -201,21 +205,25 @@ class Agent:
             room.send_text(answer)
         else:
             for code in codes:
-                ret = self.tool_dispatcher(codes[0])
+                ret = self.tool_dispatcher(code)
                 if ret:
                     tool_name, tool_query, tool_answer = ret
                     if tool_name == "matrix":
                         room.send_text(tool_query)
                         return
                     else:
-                        db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                               (ts // 1000, "mind_maker_bot", tool_query))
-                        db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                               (ts // 1000, tool_name, tool_answer))
+                        print(tool_answer)
+                        for query, query_result in tool_answer:
+                            print(query, query_result)
+                            self.bot.log_room.send_text(f"{self.bot.name}: {query}")
+                            db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                                   (ts // 1000, "mind_maker_agent", query))
+                            self.bot.log_room.send_text(f"{tool_name}: {str(query_result)}")
+                            db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                                   (ts // 1000, tool_name, str(query_result)))
                         self.update_conversation_context()
-                    break # We only want to execute the first valid code
-
-        self.use_prompt(prompt_name, command, room, sender, ts, recursion+1)
+                    break   # We only want to execute the first valid code
+            self.use_prompt(prompt_name, command, room, sender, ts, recursion+1)
 
         # for code in codes:
         #     self.tool_dispatcher(code)
@@ -254,7 +262,7 @@ class Agent:
                         self.room.send_text("OpenAI InvalidRequestError (Probablement une erreur de programmation/prompt)")
                     except Exception as e:
                         self.append_log(f"Python exception\nError: {type(e).__name__}: {e}", True)
-                        self.room.send_text(f"Python exception\nError: {type(e).__name__}: {e}")
+                        self.room.send_text(f"Python exception:\n{traceback.format_exc()}")
                         self.update_history = False
                     finally:
                         self.write_log()
@@ -267,7 +275,7 @@ class Agent:
                     if event['type'] == "m.room.message" and event['sender'].split(":") == "@mind_maker_agent":
                         self.update_history = True
         except Exception as e:
-            self.append_log(f"Python exception\nError: {type(e).__name__}: {e}", True)
+            self.append_log(f"Python exception\nError: {traceback.format_exc()}", True)
         finally:
             try:
                 self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
