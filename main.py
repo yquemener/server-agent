@@ -42,6 +42,7 @@ import configuration as C
 # TODO: The summarization prompt should be acquired from the prompts table and should be agent specific
 # TODO: Make listener mode where the agent listens to a conversation and sums it up on demand
 # TODO: Restore context even for the first request
+# TODO: Bouton HTML pour effacer la DB playground
 # TODO: Reactivate the avatar change but as an option in the web interface
 # TODO nginx redirect from 80 (and https) to 8448 (so that the server url is https://matrix.iv-labs.org instead
 #  of http://matrix.iv-labs.org:8448)
@@ -160,6 +161,19 @@ def conversation_logs(room_id):
             continue
         messages.append((m[0], json.loads(m[1])))
     return render_template('bot_log.html', name=room_id, messages=messages)
+
+@app.route('/agent/<room_id>/playground')
+def show_playground(room_id):
+    tables = db_req(bot.agents[room_id].playground_db_name,
+           "SELECT name FROM sqlite_master WHERE type='table';", row_factory=True)
+    table_data = {}
+    for table in tables:
+        print(table)
+        table_name = table['name']
+        rows=db_req(bot.agents[room_id].playground_db_name,f"SELECT * FROM {table_name};", row_factory=True)
+        table_data[table_name] = [dict(row) for row in rows]
+    return render_template('playground.html', table_data=table_data,
+                           name=room_id)
 
 @app.route('/agent/<room_id>/conversation_context')
 def conversation_context(room_id):

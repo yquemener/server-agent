@@ -63,6 +63,7 @@ class Agent:
         self.tools = {
             "sql": tools.sql.SqlModule(self.playground_db_name)
         }
+        self.update_conversation_context()
 
     def append_log(self, s, p=False):
         self.current_log.append(str(s))
@@ -133,11 +134,13 @@ class Agent:
 
     def tool_dispatcher(self, s):
         # Remove the first line: it is either empty or contains a datatype because of the syntax ```json
-        s = "\n".join(s.split("\n")[1:])
         try:
+            s = "\n".join(s.split("\n")[1:])
             d = json.loads(s)
-            s = self.tools[d["type"]].execute_query(d["content"])
-            print(s)
+            if d["type"]=="matrix":
+                return d["type"], d["content"], ""
+            answer = self.tools[d["type"]].execute_query(d["content"])
+            return d["type"], d["content"], answer
         except:
             return
 
@@ -170,7 +173,14 @@ class Agent:
                 code_blocks.append(bs[i])
         return body, code_blocks
 
-    def use_prompt(self, prompt_name, command, room, sender):
+    def use_prompt(self, prompt_name, command, room, sender, ts, recursion=0):
+        self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
+                                  {"typing": True, "timeout": 30000})
+        if recursion > 10:
+            room.send_text("Recursion limit reached")
+            self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
+                                      {"typing": False, "timeout": 3000})
+            return
         # Runs a prompt that's from the prompts database
         self.append_log(f"Instruction: {prompt_name} {command}", True)
         prompt = db_req(self.bot.bot_db,
@@ -180,16 +190,35 @@ class Agent:
         prompt = prompt[0][0]
 
         prompt_context = {
-            "instruction": " ".join(command.split(" ")[1:]),
+            "instruction": command,
             "username": utils.extract_username(sender),
             "conversation_context": self.conversation_context,
             "sql_summary": self.tools["sql"].context()
         }
         populated_prompt = prompt.format(**prompt_context)
         answer, codes = self.chatgpt_request(populated_prompt)
-        for code in codes:
-            self.tool_dispatcher(code)
-        room.send_text(answer)
+        if len(codes) == 0:
+            room.send_text(answer)
+        else:
+            for code in codes:
+                ret = self.tool_dispatcher(codes[0])
+                if ret:
+                    tool_name, tool_query, tool_answer = ret
+                    if tool_name == "matrix":
+                        room.send_text(tool_query)
+                        return
+                    else:
+                        db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                               (ts // 1000, "mind_maker_bot", tool_query))
+                        db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                               (ts // 1000, tool_name, tool_answer))
+                        self.update_conversation_context()
+                    break # We only want to execute the first valid code
+
+        self.use_prompt(prompt_name, command, room, sender, ts, recursion+1)
+
+        # for code in codes:
+        #     self.tool_dispatcher(code)
 
     def on_message(self, event):
         if event["origin_server_ts"] < self.first_ts:
@@ -213,7 +242,7 @@ class Agent:
                         self.room.send_text(instruction)
                     try:
                         prompt_name = command.lstrip("!")
-                        self.use_prompt(prompt_name, instruction, self.room, event['sender'])
+                        self.use_prompt(prompt_name, instruction, self.room, event['sender'], event['origin_server_ts'])
 
                     except openai.error.RateLimitError:
                         self.append_log(f"openai\nRateLimitError", True)

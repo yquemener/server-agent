@@ -11,7 +11,7 @@ class SqlModule:
             conn = sqlite3.connect(self.db_file)
             c = conn.cursor()
             results = ""
-            for i, query in enumerate(queries.strip().split(";")):
+            for i, query in enumerate(queries.strip().split(";")[:-1]):
                 try:
                     query = query.strip()
                     c.execute(query)

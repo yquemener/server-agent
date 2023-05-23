@@ -2,10 +2,12 @@ import sqlite3
 
 
 # Does a SQL request, returns result if any
-def db_req(dbname, req, args=None):
+def db_req(dbname, req, args=None, row_factory=False):
     if args is None:
         args = []
     conn = sqlite3.connect(dbname)
+    if row_factory:
+        conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     res = cursor.execute(req, args)
     if res:
