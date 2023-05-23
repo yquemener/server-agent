@@ -16,6 +16,7 @@ import tiktoken
 from flask import render_template, abort, redirect
 from matrix_client.client import MatrixClient
 
+import tools.sql
 import utils
 from utils import db_req
 import configuration as C
@@ -58,6 +59,10 @@ class Agent:
                         "SELECT * FROM conversation_summary ORDER BY timestamp DESC LIMIT 1;")
         if len(result) > 0:
             self.conversation_summary = result[0]
+
+        self.tools = {
+            "sql": tools.sql.SqlModule(self.playground_db_name)
+        }
 
     def append_log(self, s, p=False):
         self.current_log.append(str(s))
@@ -126,6 +131,16 @@ class Agent:
             previous_ts = ts
         self.conversation_context = (self.conversation_summary[1], page)
 
+    def tool_dispatcher(self, s):
+        # Remove the first line: it is either empty or contains a datatype because of the syntax ```json
+        s = "\n".join(s.split("\n")[1:])
+        try:
+            d = json.loads(s)
+            s = self.tools[d["type"]].execute_query(d["content"])
+            print(s)
+        except:
+            return
+
     def chatgpt_request(self, prompt):
         if type(prompt) is str:
             sprompt = prompt
@@ -167,10 +182,13 @@ class Agent:
         prompt_context = {
             "instruction": " ".join(command.split(" ")[1:]),
             "username": utils.extract_username(sender),
-            "conversation_context": self.conversation_context
+            "conversation_context": self.conversation_context,
+            "sql_summary": self.tools["sql"].context()
         }
         populated_prompt = prompt.format(**prompt_context)
         answer, codes = self.chatgpt_request(populated_prompt)
+        for code in codes:
+            self.tool_dispatcher(code)
         room.send_text(answer)
 
     def on_message(self, event):
