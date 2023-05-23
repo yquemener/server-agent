@@ -2,7 +2,6 @@ import openai,os
 
 # HOMESERVER_URL = "https://matrix-client.matrix.org"
 HOMESERVER_URL = "https://matrix.iv-labs.org:8448"
-# TODO nginx redirect from 80 (and https) to 8448
 DOCKER_ROOT_DIR = "/app/db/"
 
 if os.path.exists(DOCKER_ROOT_DIR):

@@ -2,8 +2,6 @@
 An agent is a matrix bot that has its own context and database. It lives in a separate thread. For now it can only
 be in a single matrix room at the time but the plan is that they can each have a presence in several.
 
-- TODO Have several joined discussion per agent (do we really want it?)
-- TODO find a way to make it work on encrypted channels
 
 """
 import json
@@ -72,7 +70,6 @@ class Agent:
         self.current_log = []
 
     def context_summarization(self, page, previous_summary):
-        # TODO: Replace that by a prompt acquired from the prompts table
         if len(previous_summary) > 0:
             prompt = f"""\
             Please provide a new summary of the conversation. The summary should be succinct and include all the important information given in the conversation.  

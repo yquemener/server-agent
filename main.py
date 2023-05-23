@@ -38,7 +38,16 @@ from utils import db_req
 import configuration as C
 
 
+# TODO: Design prompts chaining
+# TODO: The summarization prompt should be acquired from the prompts table and should be agent specific
+# TODO: Make listener mode where the agent listens to a conversation and sums it up on demand
+# TODO: Restore context even for the first request
 # TODO: Reactivate the avatar change but as an option in the web interface
+# TODO nginx redirect from 80 (and https) to 8448 (so that the server url is https://matrix.iv-labs.org instead
+#  of http://matrix.iv-labs.org:8448)
+# TODO find a way to make the bot work on encrypted channels. Can be long: the lib used apparently does not support it
+#  well
+
 
 class Bot:
     def __init__(self, bot_db_path):
