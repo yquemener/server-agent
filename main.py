@@ -182,6 +182,8 @@ def show_playground(room_id):
 def reset_playground(room_id):
     tables = db_req(bot.agents[room_id].playground_db_name, f"SELECT name FROM sqlite_master WHERE type='table';")
     for table in tables:
+        if table.startswith("sqlite_"):
+            continue
         table_name = table[0]
         db_req(bot.agents[room_id].playground_db_name, f"DROP TABLE IF EXISTS {table_name};")
     return make_response("",200)

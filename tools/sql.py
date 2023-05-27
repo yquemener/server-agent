@@ -6,7 +6,6 @@ class SqlModule:
         self.db_file = db_file
 
     def execute_query(self, queries):
-        print(f"Database: {self.db_file}")
         try:
             conn = sqlite3.connect(self.db_file)
             c = conn.cursor()
