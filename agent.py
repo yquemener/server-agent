@@ -23,6 +23,8 @@ from utils import db_req
 import configuration as C
 
 
+OPENAI_ERROR_RETRIES = 4        # How many times do we retry after an OpenAI Rate Error?
+
 class Agent:
     def __init__(self, room, bot):
         self.first_ts = -1
@@ -65,6 +67,8 @@ class Agent:
             "sql": tools.sql.SqlModule(self.playground_db_name)
         }
         self.update_conversation_context()
+        self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
+                                  {"typing": False, "timeout": 3000})
 
     def append_log(self, s, p=False):
         self.current_log.append(str(s))
@@ -136,16 +140,19 @@ class Agent:
     def tool_dispatcher(self, s):
         # Remove the first line: it is either empty or contains a datatype because of the syntax ```json
         try:
-            s = "\n".join(s.split("\n")[1:])
+            if s.count("\n")>0:
+                s = "\n".join(s.split("\n")[1:])
             d = json.loads(s)
-            if d["type"]=="matrix":
+            if d["type"].startswith("matrix_") or d["type"] == "matrix":
+                return d["type"], d["content"], ""
+            if d["type"].startswith("!"):
                 return d["type"], d["content"], ""
             content = d["content"]
             if type(content) is list:
                 content = "\n".join(content)
             answer = self.tools[d["type"]].execute_query(content)
             return d["type"], d["content"], answer
-        except:
+        except Exception as e:
             return
 
     def chatgpt_request(self, prompt):
@@ -193,11 +200,28 @@ class Agent:
             return
         prompt = prompt[0][0]
 
+        conversation_context_str = ""
+
+        if self.conversation_context[0] != "":
+            conversation_context_str += "Here is a summary of the conversation so far:\n"
+            conversation_context_str += "'''\n"
+            conversation_context_str += self.conversation_context[0]+"\n"
+            conversation_context_str += "'''\n"
+
+        if self.conversation_context[1] != "":
+            conversation_context_str += "Here are the last messages in the conversation:\n"
+            conversation_context_str += "'''\n"
+            conversation_context_str += self.conversation_context[1]+"\n"
+            conversation_context_str += "'''\n"
+
+
         prompt_context = {
             "instruction": command,
             "username": utils.extract_username(sender),
             "conversation_context": self.conversation_context,
-            "sql_summary": self.tools["sql"].context()
+            "conversation_context_str": conversation_context_str,
+            "sql_summary": self.tools["sql"].context(),
+            "sql_conversation": self.tools["sql"].conversation()
         }
         populated_prompt = prompt.format(**prompt_context)
         answer, codes = self.chatgpt_request(populated_prompt)
@@ -208,19 +232,23 @@ class Agent:
                 ret = self.tool_dispatcher(code)
                 if ret:
                     tool_name, tool_query, tool_answer = ret
-                    if tool_name == "matrix":
+                    print("__",ret)
+                    if tool_name.startswith("matrix_") or tool_name == "matrix":
                         room.send_text(tool_query)
                         return
+                    elif tool_name.startswith("!"):
+                        self.use_prompt(tool_name.lstrip("!"), tool_query, room, self.bot.name, ts, recursion + 1)
+                        self.bot.log_room.send_text(f"{self.bot.name}: Sending prompt {tool_name} with instruction {tool_query}")
                     else:
                         print(tool_answer)
                         for query, query_result in tool_answer:
                             print(query, query_result)
                             self.bot.log_room.send_text(f"{self.bot.name}: {query}")
-                            db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                                   (ts // 1000, "mind_maker_agent", query))
+                            # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                            #        (ts // 1000, "mind_maker_agent", query))
                             self.bot.log_room.send_text(f"{tool_name}: {str(query_result)}")
-                            db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                                   (ts // 1000, tool_name, str(query_result)))
+                            # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                            #        (ts // 1000, tool_name, str(query_result)))
                         self.update_conversation_context()
                     break   # We only want to execute the first valid code
             self.use_prompt(prompt_name, command, room, sender, ts, recursion+1)
@@ -250,6 +278,8 @@ class Agent:
                         self.room.send_text(instruction)
                     try:
                         prompt_name = command.lstrip("!")
+                        for t in self.tools.values():
+                            t.reset()
                         self.use_prompt(prompt_name, instruction, self.room, event['sender'], event['origin_server_ts'])
 
                     except openai.error.RateLimitError:

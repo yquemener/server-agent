@@ -46,6 +46,7 @@ import configuration as C
 #  of http://matrix.iv-labs.org:8448)
 # TODO find a way to make the bot work on encrypted channels. Can be long: the lib used apparently does not support it
 #  well
+# TODO Start writing in the conversations DB during the whole process
 
 
 class Bot:
@@ -182,7 +183,7 @@ def show_playground(room_id):
 def reset_playground(room_id):
     tables = db_req(bot.agents[room_id].playground_db_name, f"SELECT name FROM sqlite_master WHERE type='table';")
     for table in tables:
-        if table.startswith("sqlite_"):
+        if table[0].startswith("sqlite_"):
             continue
         table_name = table[0]
         db_req(bot.agents[room_id].playground_db_name, f"DROP TABLE IF EXISTS {table_name};")

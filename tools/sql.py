@@ -4,14 +4,23 @@ import sqlite3
 class SqlModule:
     def __init__(self, db_file):
         self.db_file = db_file
+        self.history = list()
+
+    def reset(self):
+        self.history.clear()
+
+    def conversation(self):
+        return "\n".join([f"{h[0]}: {h[1]}" for h in self.history])
 
     def execute_query(self, queries):
         try:
             conn = sqlite3.connect(self.db_file)
             c = conn.cursor()
             ret = []
-            for i, query in enumerate(queries.strip().split(";")[:-1]):
+            for i, query in enumerate(queries.strip().split(";")):
                 try:
+                    if query.strip()=="":
+                        continue
                     query = query.strip() + ";"
                     c.execute(query)
                     conn.commit()
@@ -19,10 +28,11 @@ class SqlModule:
                     ret.append((query, result))
                 except sqlite3.Error as e:
                     ret.append((query, f"{type(e).__name__}: {e}"))
+                self.history.append(ret[-1])
             conn.close()
             return ret
         except Exception as e:
-            print(f"T'as merdé mon grand: {e}")
+            print(f"SQL Error: {e}")
         return
 
     def context(self):
