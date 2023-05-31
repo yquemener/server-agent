@@ -96,13 +96,11 @@ class Agent:
             c.execute('INSERT INTO bot_log VALUES (?, ?);',
                       (time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()), json.dumps(self.current_log)))
             self.last_insert_id = c.lastrowid  # Get the ID of the inserted row
-            print(self.last_insert_id)
             conn.commit()
 
     def update_log(self):
         with sqlite3.connect(self.system_db_name) as conn:
             c = conn.cursor()
-            print(self.last_insert_id)
             c.execute('UPDATE bot_log SET message = ? WHERE rowid = ?;', (json.dumps(self.current_log), self.last_insert_id))
             conn.commit()
 
@@ -173,6 +171,7 @@ class Agent:
             if s.count("\n")>0:
                 s = "\n".join(s.split("\n")[1:])
             d = json.loads(s)
+            self.append_log(f"Tool {d['type']} request:\n{d['content']}")
             if d["type"].startswith("matrix_") or d["type"] == "matrix":
                 return d["type"], d["content"], ""
             if d["type"].startswith("!"):
@@ -181,8 +180,16 @@ class Agent:
             if type(content) is list:
                 content = "\n".join(content)
             answer = self.tools[d["type"]].execute_query(content)
+            if type(answer) is list:
+                for q, a in answer:
+                    self.append_log(f"Tool {d['type']} request:\n{q}", True)
+                    self.append_log(f"Tool {d['type']} answer:\n{a}", True)
+            else:
+                self.append_log(f"Tool {d['type']} answer:\n{answer}", True)
             return d["type"], d["content"], answer
         except Exception as e:
+            self.append_log(f"Python exception\n{traceback.format_exc()}", True)
+            self.bot.log_room.send_text(f"Python exception:\n{traceback.format_exc()}")
             return
 
     def chatgpt_request(self, prompt):

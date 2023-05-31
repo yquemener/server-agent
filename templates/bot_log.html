@@ -14,7 +14,7 @@
           <div class="message-part">
             {% set first_line, rest = part.strip().split('\n', 1) if '\n' in part.strip() else (part.strip(), '') %}
             <details class="message-box"  {% if part.startswith('gpt answer') %}open=""{% endif %}>
-              <summary><strong>{{ first_line }}</strong></summary><br><p>{{ rest }}</p>
+              <summary><strong>{{ first_line }}</strong></summary><p>{{ rest }}</p>
             </details>
           </div>
         {% endfor %}
