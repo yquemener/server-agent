@@ -35,6 +35,8 @@ class Agent:
         self.conversation_summary = (-1, "")  # (timestamp of last summed up message, summary)
         self.conversation_context = ["", ""]
         self.current_log = []
+        self.log_in_db = False
+        self.last_insert_id = None
         self.update_history = True
         self.temperature = 0.1
         self.request_finished = False
@@ -76,13 +78,37 @@ class Agent:
 
     def append_log(self, s, p=False):
         self.current_log.append(str(s))
+
+        if self.log_in_db:
+            # If the log is already in db, update the last inserted row
+            self.update_log()
+        else:
+            # If the log is not in db, insert a new row and set log_in_db to True
+            self.create_log()
+            self.log_in_db = True
+
         if p:
             print(s)
 
+    def create_log(self):
+        with sqlite3.connect(self.system_db_name) as conn:
+            c = conn.cursor()
+            c.execute('INSERT INTO bot_log VALUES (?, ?);',
+                      (time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()), json.dumps(self.current_log)))
+            self.last_insert_id = c.lastrowid  # Get the ID of the inserted row
+            print(self.last_insert_id)
+            conn.commit()
+
+    def update_log(self):
+        with sqlite3.connect(self.system_db_name) as conn:
+            c = conn.cursor()
+            print(self.last_insert_id)
+            c.execute('UPDATE bot_log SET message = ? WHERE rowid = ?;', (json.dumps(self.current_log), self.last_insert_id))
+            conn.commit()
+
     def write_log(self):
-        db_req(self.system_db_name, 'INSERT INTO bot_log VALUES (?, ?);',
-               (time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()), json.dumps(self.current_log)))
         self.current_log = []
+        self.log_in_db = False
 
     def context_summarization(self, page, previous_summary):
         if len(previous_summary) > 0:
@@ -189,6 +215,7 @@ class Agent:
         return body, code_blocks
 
     def use_prompt(self, prompt_name, command, room, sender, ts, recursion=0):
+        print(self.temperature)
         if self.request_finished:
             if recursion==0:
                 self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
@@ -255,12 +282,7 @@ class Agent:
                             for query, query_result in tool_answer:
                                 print(query, query_result)
                                 self.bot.log_room.send_text(f"{self.bot.name}: {query}")
-                                # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                                #        (ts // 1000, "mind_maker_agent", query))
                                 self.bot.log_room.send_text(f"{tool_name}: {str(query_result)}")
-                                # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                                #        (ts // 1000, tool_name, str(query_result)))
-                            # self.update_conversation_context()
                     break   # We only want to execute the first valid code
             self.use_prompt(prompt_name, command, room, sender, ts, recursion+1)
 

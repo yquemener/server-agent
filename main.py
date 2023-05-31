@@ -40,15 +40,17 @@ import configuration as C
 
 
 # TODO: retry on OpenAI error
+# TODO: Fold the prompt by default in conversation log, and maybe improve readability of outputs
 # TODO: The summarization prompt should be acquired from the prompts table and should be agent specific
 # TODO: Make listener mode where the agent listens to a conversation and sums it up on demand
+# TODO: Create a "request" object (and forget the conversation in case the task fail?)
+# TODO: find a way to put the prompts in the github repo
+# TODO: Bouton reset unique (tables+contexte) sur la page principale de l'agent
 # TODO: Reactivate the avatar change but as an option in the web interface
 # TODO nginx redirect from 80 (and https) to 8448 (so that the server url is https://matrix.iv-labs.org instead
 #  of http://matrix.iv-labs.org:8448)
 # TODO find a way to make the bot work on encrypted channels. Can be long: the lib used apparently does not support it
 #  well
-# TODO Start writing in the conversations DB during the whole process
-# TODO: Create a "request" object (and forget the conversation in case the task fail?)
 
 
 class Bot:
