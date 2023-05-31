@@ -40,6 +40,9 @@ import configuration as C
 
 
 # TODO: retry on OpenAI error
+# TODO: Interrupt button on the web interface
+# TODO: recursion limit parameter on prompts
+# TODO: Write regression tests, make the framework for that
 # TODO: The summarization prompt should be acquired from the prompts table and should be agent specific
 # TODO: Make listener mode where the agent listens to a conversation and sums it up on demand
 # TODO: Create a "request" object (and forget the conversation in case the task fail?)

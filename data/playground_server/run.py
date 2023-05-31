@@ -42,7 +42,7 @@ class MyHandler(FileSystemEventHandler):
 
 event_handler = MyHandler()
 observer = Observer()
-observer.schedule(event_handler, recursive=True)
+observer.schedule(event_handler, recursive=True, path="./")
 observer.start()
 
 try:
