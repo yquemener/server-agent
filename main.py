@@ -40,7 +40,6 @@ import configuration as C
 
 
 # TODO: retry on OpenAI error
-# TODO: Fold the prompt by default in conversation log, and maybe improve readability of outputs
 # TODO: The summarization prompt should be acquired from the prompts table and should be agent specific
 # TODO: Make listener mode where the agent listens to a conversation and sums it up on demand
 # TODO: Create a "request" object (and forget the conversation in case the task fail?)
