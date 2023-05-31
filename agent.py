@@ -18,6 +18,7 @@ from flask import render_template, abort, redirect
 from matrix_client.client import MatrixClient
 
 import tools.sql
+import tools.flask
 import utils
 from utils import db_req
 import configuration as C
@@ -35,6 +36,8 @@ class Agent:
         self.conversation_context = ["", ""]
         self.current_log = []
         self.update_history = True
+        self.temperature = 0.1
+        self.request_finished = False
 
         self.system_db_name = f"{C.ROOT_DIR}/agent_{room.room_id}.db"
         self.playground_db_name = f"{C.ROOT_DIR}/agent_playground_{room.room_id}.db"
@@ -64,7 +67,8 @@ class Agent:
             self.conversation_summary = result[0]
 
         self.tools = {
-            "sql": tools.sql.SqlModule(self.playground_db_name)
+            "sql": tools.sql.SqlModule(self.playground_db_name),
+            "flask": tools.flask.FlaskModule(f"{C.ROOT_DIR}/playground_server/")
         }
         self.update_conversation_context()
         self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
@@ -168,7 +172,7 @@ class Agent:
         rep = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": c} for c in prompt],
-            temperature=0.1,
+            temperature=self.temperature,
             max_tokens=4000 - len(enc.encode(sprompt)),
         )
         body = rep["choices"][0]["message"]["content"]
@@ -185,9 +189,15 @@ class Agent:
         return body, code_blocks
 
     def use_prompt(self, prompt_name, command, room, sender, ts, recursion=0):
+        if self.request_finished:
+            if recursion==0:
+                self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
+                                          {"typing": False, "timeout": 30000})
+            return
+
         self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
                                   {"typing": True, "timeout": 30000})
-        if recursion > 6:
+        if recursion > 3:
             room.send_text("Recursion limit reached")
             self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
                                       {"typing": False, "timeout": 3000})
@@ -232,29 +242,27 @@ class Agent:
                 ret = self.tool_dispatcher(code)
                 if ret:
                     tool_name, tool_query, tool_answer = ret
-                    print("__",ret)
+                    print("__", ret)
                     if tool_name.startswith("matrix_") or tool_name == "matrix":
                         room.send_text(tool_query)
+                        self.request_finished = True
                         return
                     elif tool_name.startswith("!"):
                         self.use_prompt(tool_name.lstrip("!"), tool_query, room, self.bot.name, ts, recursion + 1)
                         self.bot.log_room.send_text(f"{self.bot.name}: Sending prompt {tool_name} with instruction {tool_query}")
                     else:
-                        print(tool_answer)
-                        for query, query_result in tool_answer:
-                            print(query, query_result)
-                            self.bot.log_room.send_text(f"{self.bot.name}: {query}")
-                            # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                            #        (ts // 1000, "mind_maker_agent", query))
-                            self.bot.log_room.send_text(f"{tool_name}: {str(query_result)}")
-                            # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
-                            #        (ts // 1000, tool_name, str(query_result)))
-                        self.update_conversation_context()
+                        if tool_answer:
+                            for query, query_result in tool_answer:
+                                print(query, query_result)
+                                self.bot.log_room.send_text(f"{self.bot.name}: {query}")
+                                # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                                #        (ts // 1000, "mind_maker_agent", query))
+                                self.bot.log_room.send_text(f"{tool_name}: {str(query_result)}")
+                                # db_req(self.system_db_name, 'INSERT INTO conversation VALUES (?, ?, ?);',
+                                #        (ts // 1000, tool_name, str(query_result)))
+                            # self.update_conversation_context()
                     break   # We only want to execute the first valid code
             self.use_prompt(prompt_name, command, room, sender, ts, recursion+1)
-
-        # for code in codes:
-        #     self.tool_dispatcher(code)
 
     def on_message(self, event):
         if event["origin_server_ts"] < self.first_ts:
@@ -265,14 +273,19 @@ class Agent:
                 line = event['content']['body']
                 instruction = line
                 if instruction[0] == "!":
-                    self.bot. client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
+                    self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
                                                {"typing": True, "timeout": 30000})
+                    self.request_finished = False
                     if instruction[1] == "!":
                         self.update_history = False
                     else:
                         self.update_history = True
                     args = line.split(" ")
                     command = args[0].lstrip("!")
+                    try:
+                        self.temperature = float(args[1])
+                    except:
+                        self.temperature = 0.1
                     instruction = " ".join(args[1:])
                     if command == "echo":
                         self.room.send_text(instruction)

@@ -10,7 +10,7 @@ class SqlModule:
         self.history.clear()
 
     def conversation(self):
-        return "\n".join([f"{h[0]}: {h[1]}" for h in self.history])
+        return "\n".join([f"{h[0]}\nResult of the query: {h[1]}" for h in self.history])
 
     def execute_query(self, queries):
         try:
@@ -19,12 +19,14 @@ class SqlModule:
             ret = []
             for i, query in enumerate(queries.strip().split(";")):
                 try:
-                    if query.strip()=="":
+                    if query.strip() == "":
                         continue
                     query = query.strip() + ";"
                     c.execute(query)
                     conn.commit()
                     result = c.fetchall()
+                    if len(result) == 0:
+                        result = "Success"
                     ret.append((query, result))
                 except sqlite3.Error as e:
                     ret.append((query, f"{type(e).__name__}: {e}"))

@@ -23,6 +23,7 @@ Databases:
 """
 import json
 import re
+import subprocess
 
 import tiktoken
 from matrix_client.client import MatrixClient
@@ -47,6 +48,7 @@ import configuration as C
 # TODO find a way to make the bot work on encrypted channels. Can be long: the lib used apparently does not support it
 #  well
 # TODO Start writing in the conversations DB during the whole process
+# TODO: Create a "request" object (and forget the conversation in case the task fail?)
 
 
 class Bot:
@@ -238,5 +240,6 @@ bot.start(C.HOMESERVER_URL,
           C.BOT_USERNAME.lstrip("@").split(":")[0],
           C.MATRIX_PASSWORD)
 
+process = subprocess.Popen(['python', 'run.py'], cwd='data/playground_server/')
 
 app.run(host='0.0.0.0', port=8080)
