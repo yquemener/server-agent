@@ -11,6 +11,7 @@ RUN pip install flask
 RUN pip install matrix_client
 RUN pip install openai
 RUN pip install tiktoken
+RUN pip install watchdog
 
 # Create root directory for our project in the container
 RUN mkdir /app
