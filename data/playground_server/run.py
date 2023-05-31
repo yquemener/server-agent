@@ -15,8 +15,6 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from subprocess import Popen
 import time
-import os
-import configuration as C
 
 
 class MyHandler(FileSystemEventHandler):
@@ -44,7 +42,7 @@ class MyHandler(FileSystemEventHandler):
 
 event_handler = MyHandler()
 observer = Observer()
-observer.schedule(event_handler, path=f'{C.ROOT_DIR}/playground_server', recursive=True)
+observer.schedule(event_handler, recursive=True)
 observer.start()
 
 try:

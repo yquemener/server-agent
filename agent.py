@@ -190,7 +190,7 @@ class Agent:
         except Exception as e:
             self.append_log(f"Python exception\n{traceback.format_exc()}", True)
             self.bot.log_room.send_text(f"Python exception:\n{traceback.format_exc()}")
-            return
+            return "Error", s, f"{type(e).__name__}: {e}"
 
     def chatgpt_request(self, prompt):
         if type(prompt) is str:
