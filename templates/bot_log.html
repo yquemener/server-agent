@@ -5,7 +5,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-  <a href="/agent/{{name}}">Retour</a>
+    <a href="/agent/{{name}}">Retour</a>
     <h1>Agent {{name}} Messages</h1>
     {% for timestamp, message in messages %}
       <details class="message-box">
@@ -13,7 +13,9 @@
         {% for part in message %}
           <div class="message-part">
             {% set first_line, rest = part.strip().split('\n', 1) if '\n' in part.strip() else (part.strip(), '') %}
-            <p><strong>{{ first_line }}</strong><br>{{ rest }}</p>
+            <details class="message-box"  {% if part.startswith('gpt answer') %}open=""{% endif %}>
+              <summary><strong>{{ first_line }}</strong></summary><br><p>{{ rest }}</p>
+            </details>
           </div>
         {% endfor %}
       </details>
