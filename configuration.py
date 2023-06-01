@@ -18,9 +18,11 @@ try:
     openai.api_key = open("/home/yves/keys/openAIAPI", "r").read().rstrip("\n")
     BOT_USERNAME = "@mind_maker_bot_local:matrix.iv-labs.org"
     MATRIX_PASSWORD = open("/home/yves/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
+    HTTP_PASSWORD = open("/home/yves/keys/MindMakerHttpPassword", "r").read().rstrip("\n")
     HOSTNAME = "http://127.0.0.1:8080"
 except FileNotFoundError:
     openai.api_key = open("/app/keys/openAIAPI", "r").read().rstrip("\n")
     BOT_USERNAME = "@mind_maker_bot:matrix.iv-labs.org"
     MATRIX_PASSWORD = open("/app/keys/MindMakerAgentPassword", "r").read().rstrip("\n")
+    HTTP_PASSWORD = open("/app/keys/MindMakerHttpPassword", "r").read().rstrip("\n")
     HOSTNAME = "http://agent.iv-labs.org"

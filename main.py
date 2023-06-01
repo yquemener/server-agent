@@ -32,7 +32,11 @@ from time import sleep
 import utils
 from agent import Agent
 
-from flask import Flask, render_template, request, redirect, abort, make_response
+from flask import Flask, render_template, request, redirect, abort, make_response, Response
+from flask_httpauth import HTTPBasicAuth
+from werkzeug.security import generate_password_hash, check_password_hash
+
+
 from threading import Thread
 
 from utils import db_req
@@ -128,14 +132,40 @@ class Bot:
 
 # Now initializing the web server
 app = Flask(__name__)
-
+auth = HTTPBasicAuth()
 encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
+WHITELISTED_ROUTES = []
+
+users = {
+    "user": generate_password_hash(C.HTTP_PASSWORD)
+}
+
+@app.before_request
+def require_auth():
+    # check if the route requires authentication
+    if request.path not in WHITELISTED_ROUTES:
+        auth.login_required()
+
+@auth.verify_password
+def verify_password(username, password):
+    if username in users and \
+            check_password_hash(users.get(username), password):
+        return username
+
 @app.route('/')
+@auth.login_required
 def home():
     return render_template('index.html', joined_rooms=bot.client.rooms,
                            name=bot.client.user_id)
 
+@app.route('/logout')
+def logout():
+    resp = Response("Logout", 401)
+    resp.headers['WWW-Authenticate'] = 'Basic realm="Main"'
+    return resp
+
 @app.route('/prompts_edit', methods=["GET", "POST"])
+@auth.login_required
 def prompts_edit():
     if request.method == 'POST':
         name = request.form['name']
@@ -158,11 +188,13 @@ def prompts_edit():
     return render_template('prompts_edit.html', bot=bot, prompts=prompts)
 
 @app.route('/agent/<room_id>')
+@auth.login_required
 def agent_home(room_id):
     return render_template('agent_home.html', name=room_id)
 
 
 @app.route('/agent/<room_id>/logs')
+@auth.login_required
 def conversation_logs(room_id):
     log = db_req(bot.agents[room_id].system_db_name, "SELECT timestamp, message FROM bot_log ORDER BY timestamp DESC;")
     messages = list()
@@ -173,6 +205,7 @@ def conversation_logs(room_id):
     return render_template('bot_log.html', name=room_id, messages=messages)
 
 @app.route('/agent/<room_id>/playground')
+@auth.login_required
 def show_playground(room_id):
     tables = db_req(bot.agents[room_id].playground_db_name,
            "SELECT name FROM sqlite_master WHERE type='table';", row_factory=True)
@@ -186,6 +219,7 @@ def show_playground(room_id):
                            name=room_id)
 
 @app.route('/agent/<room_id>/playground/reset', methods=["POST"])
+@auth.login_required
 def reset_playground(room_id):
     tables = db_req(bot.agents[room_id].playground_db_name, f"SELECT name FROM sqlite_master WHERE type='table';")
     for table in tables:
@@ -196,6 +230,7 @@ def reset_playground(room_id):
     return make_response("",200)
 
 @app.route('/agent/<room_id>/conversation_context')
+@auth.login_required
 def conversation_context(room_id):
     print(bot.agents)
     size0 = len(encoder.encode(bot.agents[room_id].conversation_context[0]))
@@ -203,6 +238,7 @@ def conversation_context(room_id):
     return render_template('conversation_context.html', name=room_id, agent=bot.agents[room_id], sizes=(size0, size1))
 
 @app.route('/agent/<room_id>/conversation_context/reset', methods=["POST"])
+@auth.login_required
 def conversation_context_reset(room_id):
     db_req(bot.agents[room_id].system_db_name, "DELETE FROM conversation;")
     bot.agents[room_id].conversation_context = ("", "")
