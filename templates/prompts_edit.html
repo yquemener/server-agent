@@ -12,6 +12,9 @@
   </script>
 </head>
 <body>
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% endif %}
 <a href="/">Retour</a>
   <h1>Edit Prompts</h1>
   <form action="/prompts_edit" method="post">
@@ -25,6 +28,8 @@
     </div>
     <div>
       <input type="submit" value="Add/Edit Prompt">
+      <input type="submit" name="save_defaults" value="Save Defaults">
+      <input type="submit" name="restore_defaults" value="Restore Defaults">
     </div>
   </form>
 

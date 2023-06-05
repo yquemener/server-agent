@@ -22,6 +22,7 @@ Databases:
     - database the agent can use to send SQL requests
 """
 import json
+import os
 import re
 import subprocess
 
@@ -128,8 +129,6 @@ class Bot:
                 self.agents[room_id] = Agent(room, self)
 
 
-
-
 # Now initializing the web server
 app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -167,25 +166,51 @@ def logout():
 @app.route('/prompts_edit', methods=["GET", "POST"])
 @auth.login_required
 def prompts_edit():
+    error=None
     if request.method == 'POST':
-        name = request.form['name']
-        prompt = request.form['prompt']
-        if 'delete_prompt' in request.form:
-            db_req(bot.bot_db, "DELETE FROM prompts WHERE name=?", (request.form["name"],))
-        else:
-            existing = db_req(bot.bot_db, "SELECT name FROM prompts WHERE name=?", (request.form["name"],))
-
-            if existing:
-                db_req(bot.bot_db, "UPDATE prompts SET prompt=? WHERE name=?", (prompt, name))
+        if request.method == 'POST':
+            if 'save_defaults' in request.form:
+                rows = db_req(bot.bot_db, "SELECT name, prompt FROM prompts")
+                prompts = {r[0]: r[1] for r in rows}
+                with open('prompts.json', 'w') as f:
+                    json.dump(prompts, f, indent=4, sort_keys=True)
+                return render_template('prompts_edit.html', bot=bot, prompts=list(prompts.items()))
+            elif 'restore_defaults' in request.form:
+                if os.path.exists('prompts.json'):
+                    with open('prompts.json', 'r') as f:
+                        prompts = json.load(f)
+                    db_req(bot.bot_db, "DELETE FROM prompts")
+                    for name, prompt in prompts.items():
+                        db_req(bot.bot_db, "INSERT INTO prompts (name, prompt) VALUES (?, ?)", (name, prompt))
+                    rows = db_req(bot.bot_db, "SELECT name, prompt FROM prompts")
+                    prompts = list()
+                    for r in rows:
+                        prompt = re.sub(r'\r?\n', '<br>', r[1])
+                        prompt = re.sub(r'\'', '\\\'', prompt)
+                        prompts.append((r[0], prompt))
+                    return render_template('prompts_edit.html', bot=bot, prompts=prompts, error=error)
+                else:
+                    error = "No default prompts file found."
             else:
-                db_req(bot.bot_db, "INSERT INTO prompts (name, prompt) VALUES (?, ?)", (name, prompt))
+                name = request.form['name']
+                prompt = request.form['prompt']
+                if 'delete_prompt' in request.form:
+                    db_req(bot.bot_db, "DELETE FROM prompts WHERE name=?", (request.form["name"],))
+                else:
+                    existing = db_req(bot.bot_db, "SELECT name FROM prompts WHERE name=?", (request.form["name"],))
+
+                    if existing:
+                        db_req(bot.bot_db, "UPDATE prompts SET prompt=? WHERE name=?", (prompt, name))
+                    else:
+                        db_req(bot.bot_db, "INSERT INTO prompts (name, prompt) VALUES (?, ?)", (name, prompt))
     rows = db_req(bot.bot_db, "SELECT name, prompt FROM prompts")
     prompts = list()
     for r in rows:
         prompt = re.sub(r'\r?\n', '<br>', r[1])
         prompt = re.sub(r'\'', '\\\'', prompt)
         prompts.append((r[0], prompt))
-    return render_template('prompts_edit.html', bot=bot, prompts=prompts)
+    return render_template('prompts_edit.html', bot=bot, prompts=prompts, error=error)
+
 
 @app.route('/agent/<room_id>')
 @auth.login_required

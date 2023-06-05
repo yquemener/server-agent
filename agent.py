@@ -281,6 +281,10 @@ class Agent:
                         room.send_text(tool_query)
                         self.request_finished = True
                         return
+                    elif tool_name == "Error":
+                        room.send_text(tool_query)
+                        self.request_finished = True
+                        return
                     elif tool_name.startswith("!"):
                         self.use_prompt(tool_name.lstrip("!"), tool_query, room, self.bot.name, ts, recursion + 1)
                         self.bot.log_room.send_text(f"{self.bot.name}: Sending prompt {tool_name} with instruction {tool_query}")
