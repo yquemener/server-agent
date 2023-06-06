@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 
@@ -58,3 +59,26 @@ def pprint(l, indent=0):
                 print(f"{indent*' '}{k}: {v}")
     else:
         print(indent*' '+str(l))
+
+
+# Extract the first valid json snippet from a string
+def extract_json(s):
+    lines = s.split("\n")
+    for i in range(len(lines)):
+        try:
+            j = json.loads("\n".join(lines[i:]))
+            return j
+        except Exception as e:
+            # print(i,e, lines[i][:30])
+            if e.msg == "Expecting value":
+                continue
+            else:
+                try:
+                    j = json.loads("\n".join(lines[i:i+e.lineno]))
+                    return j
+                except Exception as e:
+                    try:
+                        j = json.loads("\n".join(lines[i:i+e.lineno-1]))
+                        return j
+                    except Exception:
+                        continue
