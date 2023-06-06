@@ -52,6 +52,7 @@ class Thought:
         self.tools_conversation = list()
 
     def start_thought(self, steps_limit=3):
+        self.agent.write_log()
         self.agent.create_log()
         self.agent.append_log(f"Think: {self.context['goal']}", True)
         self.do_step("intro")
@@ -291,7 +292,6 @@ class Agent:
         self.conversation_context = (self.conversation_summary[1], page)
 
     def tool_dispatcher(self, d):
-        self.append_log(f"Tool {d['type']} request:\n{d['content']}")
         if d["type"].startswith("matrix_") or d["type"] == "matrix":
             self.room.send_text(str(d.get("content", "...")))
             return d["type"], d["content"], ""
@@ -300,6 +300,8 @@ class Agent:
         content = d["content"]
         if type(content) is list:
             content = "\n".join(content)
+        if d["type"] not in self.tools.keys():
+            return d["type"], d["content"], "Error: tool does not exist"
         answer = self.tools[d["type"]].execute_query(content)
         if type(answer) is list:
             for q, a in answer:
