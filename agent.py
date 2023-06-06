@@ -25,15 +25,16 @@ from jinja2 import Template, TemplateSyntaxError
 import tools.sql
 import tools.flask
 import utils
+import os
 from utils import db_req
 import configuration as C
 
 OPENAI_ERROR_RETRIES = 4        # TODO How many times do we retry after an OpenAI Rate Error?
 
 
-chat_dbg_log = [
-    # json.load(open("dict_20230606153145.json"))
-]
+chat_dbg_log = list()
+if C.JSON_LOG:
+    chat_dbg_log.append(open("logs/openai/dict_20230606194721.json").read())
 
 class Thought:
     def __init__(self, agent):
@@ -104,7 +105,13 @@ class Thought:
         self.update_context()
         populated_prompt = template.render(**{'c': types.SimpleNamespace(**self.context)})
         # populated_prompt = prompt.format(**{'c': types.SimpleNamespace(**self.context)})
-        s,_ = self.agent.chatgpt_request(populated_prompt)
+        s, _ = self.agent.chatgpt_request(populated_prompt)
+        if C.JSON_LOG:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            filename = f"logs/openai/gpt_answer_{timestamp}_{step_name}.json"
+            with open(filename, "w") as file:
+                file.write(s)
+
         d = utils.extract_json(s)
         if not d or type(d) is not dict:
             self.fail()
@@ -323,7 +330,7 @@ class Agent:
 
         global chat_dbg_log
         if len(chat_dbg_log) > 0:
-            s = chat_dbg_log.pop(0)["choices"][0]["message"]["content"]
+            s = chat_dbg_log.pop(0)
             self.append_log(f"gpt answer\n{s}", True)
             return s, []
         rep = openai.ChatCompletion.create(
@@ -344,11 +351,6 @@ class Agent:
             for i in range(1, len(bs), 2):
                 code_blocks.append(bs[i])
 
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"dict_{timestamp}.json"
-
-        with open(filename, "w") as file:
-            json.dump(rep, file,indent=4, sort_keys=True)
         return body, code_blocks
 
     def use_prompt(self, prompt_name, command, room, sender, ts, recursion=0):
