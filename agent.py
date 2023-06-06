@@ -5,17 +5,22 @@ be in a single matrix room at the time but the plan is that they can each have a
 
 """
 import json
+import pickle
 import re
 import sqlite3
 import textwrap
 import time
 import traceback
+import types
+from collections import defaultdict
+from datetime import datetime
 
 import openai
 import requests
 import tiktoken
 from flask import render_template, abort, redirect
 from matrix_client.client import MatrixClient
+from jinja2 import Template, TemplateSyntaxError
 
 import tools.sql
 import tools.flask
@@ -23,8 +28,130 @@ import utils
 from utils import db_req
 import configuration as C
 
+OPENAI_ERROR_RETRIES = 4        # TODO How many times do we retry after an OpenAI Rate Error?
 
-OPENAI_ERROR_RETRIES = 4        # How many times do we retry after an OpenAI Rate Error?
+
+chat_dbg_log = [
+    # json.load(open("dict_20230606144810.json")),
+    # json.load(open("dict_20230606144831.json")),
+    json.load(open("dict_20230606153145.json"))
+]
+
+class Thought:
+    def __init__(self, agent):
+        self.context = defaultdict(str)
+        self.agent = agent
+
+    # Restate goal
+    # Produce a python metric
+
+        self.db_context = ""
+
+        self.original_goal = ""
+        self.restated_goal = ""
+        self.metric_for_success = ""
+        self.steps = list()
+        self.tools_conversation = list()
+
+    def start_thought(self, steps_limit=3):
+        self.agent.create_log()
+        self.agent.append_log(f"Think: {self.context['goal']}", True)
+        self.do_step("intro")
+        # self.do_step("code_metric")
+        step_i = 0
+        try:
+            metric = self.eval_metric()
+        except Exception:
+            metric = 1
+        print(f"Metric = {metric}", step_i, self.context.get("status", "ok"))
+
+        while(self.context.get("status", "") != "failed" and
+              self.context.get("status", "") != "ok" and
+              step_i < steps_limit):
+            print(f"Metric = {self.eval_metric()}")
+            step_i += 1
+            self.do_step("next_action")
+        self.do_step("present_result")
+
+    def update_context(self):
+        self.context["tool_conversation"] = self.tools_conversation
+        self.context["db_context"] = self.agent.tools["sql"].context()
+
+    def do_step(self, step_name):
+        self.agent.append_log(f"Think, step #{len(self.steps)} ({step_name}):", True)
+        self.steps.append(step_name)
+        print(f"Context:\n{self.context}\n\n")
+        prompt = db_req(self.agent.bot.bot_db,
+                        'SELECT prompt FROM prompts WHERE name = ?;', (step_name,))
+        self.update_context()
+
+        # env = Environment()
+        # try:
+        #     env.parse(template_string)
+        #     print("The template is valid.")
+        # except TemplateSyntaxError as e:
+        #     error_line = e.lineno
+        #     error_message = e.message
+        #     print(f"The template is invalid. Error at line {error_line}: {error_message}")
+
+        try:
+            template = Template(prompt[0][0])
+        except TemplateSyntaxError as e:
+            error_line = e.lineno
+            error_message = e.message
+            self.agent.bot.log_room.send_text(f"The template is invalid. Error at line {error_line}: {error_message}")
+            print(f"The template is invalid. Error at line {error_line}: {error_message}")
+
+        self.update_context()
+        populated_prompt = template.render(**{'c': types.SimpleNamespace(**self.context)})
+        # populated_prompt = prompt.format(**{'c': types.SimpleNamespace(**self.context)})
+        s,_ = self.agent.chatgpt_request(populated_prompt)
+        d = utils.extract_json(s)
+        if not d or type(d) is not dict:
+            self.fail()
+        else:
+            if "type" in d.keys() and "content" in d.keys():
+                print("DDD", d)
+                toolname, _, answer = self.agent.tool_dispatcher(d)
+                print("EEE", toolname, answer)
+                if toolname.startswith("matrix"):
+                    self.agent.room.send_text(str(answer))
+                if type(answer) is list:
+                    for a in answer:
+                        self.tools_conversation.append((toolname,)+a)
+                else:
+                    if type(answer) is tuple:
+                        self.tools_conversation.append((toolname,) + answer)
+                    else:
+                        self.tools_conversation.append((toolname, answer))
+            for k, v in d.items():
+                self.context[k] = v
+
+    def eval_metric(self):
+        locals_dict = {}
+        globals_dict = {}
+        if "metric_code" not in self.context:
+            return -1
+        program_string = self.context["metric_code"]
+
+        # Execute the program string within the locals dictionary
+        exec(program_string, globals(), locals_dict)
+
+        # Get the metric function from the locals dictionary
+        metric_func = locals_dict.get('metric')
+
+        if metric_func:
+            # Call the metric function to get the number
+            result = metric_func(self.agent.playground_db_name)
+            return result
+        else:
+            self.fail()
+            return -1
+
+    def fail(self):
+        # self.context["status"] = "failed"
+        pass
+
 
 class Agent:
     def __init__(self, room, bot):
@@ -165,32 +292,24 @@ class Agent:
             previous_ts = ts
         self.conversation_context = (self.conversation_summary[1], page)
 
-    def tool_dispatcher(self, s):
-        # Remove the first line: it is either empty or contains a datatype because of the syntax ```json
-        try:
-            if s.count("\n")>0:
-                s = "\n".join(s.split("\n")[1:])
-            d = json.loads(s)
-            self.append_log(f"Tool {d['type']} request:\n{d['content']}")
-            if d["type"].startswith("matrix_") or d["type"] == "matrix":
-                return d["type"], d["content"], ""
-            if d["type"].startswith("!"):
-                return d["type"], d["content"], ""
-            content = d["content"]
-            if type(content) is list:
-                content = "\n".join(content)
-            answer = self.tools[d["type"]].execute_query(content)
-            if type(answer) is list:
-                for q, a in answer:
-                    self.append_log(f"Tool {d['type']} request:\n{q}", True)
-                    self.append_log(f"Tool {d['type']} answer:\n{a}", True)
-            else:
-                self.append_log(f"Tool {d['type']} answer:\n{answer}", True)
-            return d["type"], d["content"], answer
-        except Exception as e:
-            self.append_log(f"Python exception\n{traceback.format_exc()}", True)
-            self.bot.log_room.send_text(f"Python exception:\n{traceback.format_exc()}")
-            return "Error", s, [(s, f"{type(e).__name__}: {e}")]
+    def tool_dispatcher(self, d):
+        self.append_log(f"Tool {d['type']} request:\n{d['content']}")
+        if d["type"].startswith("matrix_") or d["type"] == "matrix":
+            self.room.send_text(str(d.get("content", "...")))
+            return d["type"], d["content"], ""
+        if d["type"].startswith("!"):
+            return d["type"], d["content"], ""
+        content = d["content"]
+        if type(content) is list:
+            content = "\n".join(content)
+        answer = self.tools[d["type"]].execute_query(content)
+        if type(answer) is list:
+            for q, a in answer:
+                self.append_log(f"Tool {d['type']} request:\n{q}", True)
+                self.append_log(f"Tool {d['type']} answer:\n{a}", True)
+        else:
+            self.append_log(f"Tool {d['type']} answer:\n{answer}", True)
+        return d["type"], d["content"], answer
 
     def chatgpt_request(self, prompt):
         if type(prompt) is str:
@@ -202,6 +321,11 @@ class Agent:
         self.append_log(f"gpt prompt\n{sprompt}")
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
+        global chat_dbg_log
+        if len(chat_dbg_log) > 0:
+            s = chat_dbg_log.pop(0)["choices"][0]["message"]["content"]
+            self.append_log(f"gpt answer\n{s}", True)
+            return s, []
         rep = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": c} for c in prompt],
@@ -219,6 +343,12 @@ class Agent:
         if len(bs) > 1:
             for i in range(1, len(bs), 2):
                 code_blocks.append(bs[i])
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"dict_{timestamp}.json"
+
+        with open(filename, "w") as file:
+            json.dump(rep, file,indent=4, sort_keys=True)
         return body, code_blocks
 
     def use_prompt(self, prompt_name, command, room, sender, ts, recursion=0):
@@ -305,6 +435,8 @@ class Agent:
             if event['type'] == "m.room.message" and event['content']['msgtype'] == "m.text":
                 line = event['content']['body']
                 instruction = line
+                if instruction == "":
+                    return
                 if instruction[0] == "!":
                     self.bot.client.api._send("PUT", f"/rooms/{self.room.room_id}/typing/{self.bot.client.user_id}",
                                                {"typing": True, "timeout": 30000})
@@ -322,6 +454,14 @@ class Agent:
                     instruction = " ".join(args[1:])
                     if command == "echo":
                         self.room.send_text(instruction)
+                    elif command == "think":
+                        thought = Thought(self)
+                        thought.context["username"] = utils.extract_username(event['sender'])
+                        thought.context["goal"] = instruction
+                        thought.context["conversation_context"] = self.conversation_context
+                        thought.context["sql_summary"] = self.tools["sql"].context(),
+                        thought.context["sql_conversation"] = self.tools["sql"].conversation()
+                        thought.start_thought()
                     try:
                         prompt_name = command.lstrip("!")
                         for t in self.tools.values():
