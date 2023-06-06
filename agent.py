@@ -32,9 +32,7 @@ OPENAI_ERROR_RETRIES = 4        # TODO How many times do we retry after an OpenA
 
 
 chat_dbg_log = [
-    # json.load(open("dict_20230606144810.json")),
-    # json.load(open("dict_20230606144831.json")),
-    json.load(open("dict_20230606153145.json"))
+    # json.load(open("dict_20230606153145.json"))
 ]
 
 class Thought:
