@@ -26,7 +26,7 @@ class SqlModule:
                     conn.commit()
                     result = c.fetchall()
                     if len(result) == 0:
-                        result = "Success"
+                        result = "Success: []"
                     ret.append((query, result))
                 except sqlite3.Error as e:
                     ret.append((query, f"{type(e).__name__}: {e}"))

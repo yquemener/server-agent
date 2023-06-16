@@ -85,7 +85,7 @@ class Bot:
         try:
             room = self.client.join_room(room_id)
             print(f"Joined room: {room_id}")
-            self.agents[room_id] = Agent(room, self)
+            self.agents[room_id] = Agent(room, self, app)
             if type(event) is not str:
                 for e in event["events"]:
                     ts = e.get("origin_server_ts", -1)
@@ -126,7 +126,7 @@ class Bot:
                 self.log_room = room
             else:
                 room.add_listener(self.on_message)
-                self.agents[room_id] = Agent(room, self)
+                self.agents[room_id] = Agent(room, self, app)
 
 
 # Now initializing the web server
@@ -243,6 +243,11 @@ def show_playground(room_id):
     return render_template('playground.html', table_data=table_data,
                            name=room_id)
 
+@app.route('/agent/<room_id>/playground_web')
+@auth.login_required
+def show_playground_web(room_id):
+    return redirect(C.PLAYGROUND_URL)
+
 @app.route('/agent/<room_id>/playground/reset', methods=["POST"])
 @auth.login_required
 def reset_playground(room_id):
@@ -305,6 +310,6 @@ bot.start(C.HOMESERVER_URL,
           C.BOT_USERNAME.lstrip("@").split(":")[0],
           C.MATRIX_PASSWORD)
 
-process = subprocess.Popen(['python', 'run.py'], cwd='data/playground_server/')
+# process = subprocess.Popen(['python', 'run.py'], cwd='data/playground_server/')
 
 app.run(host='0.0.0.0', port=8080)
