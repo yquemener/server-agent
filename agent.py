@@ -8,6 +8,7 @@ import json
 import pickle
 import re
 import sqlite3
+import sys
 import textwrap
 import time
 import traceback
@@ -23,7 +24,9 @@ from matrix_client.client import MatrixClient
 from jinja2 import Template, TemplateSyntaxError
 
 import tools.sql
+import tools.matrix
 import tools.flask_tool
+import tools.flaskpy
 import utils
 import os
 from utils import db_req
@@ -35,12 +38,20 @@ OPENAI_ERROR_RETRIES = 4        # TODO How many times do we retry after an OpenA
 chat_dbg_log = list()
 if C.JSON_LOG:
     logs = sorted(os.listdir("logs/openai/"))
+    steps_to_load = [1,2,3,4,5,6,7,8,9,10,11,12]
     to_load = list()
+    # for st in steps_to_load:
+    #     to_load.append(sorted([l for l in logs if f"_{st}_" in l])[-1])
+
+    # to_load += logs[-9:-3]
     # to_load.append([l for l in logs if l.endswith("intro.json")][-1])
     # to_load.append([l for l in logs if l.endswith("next_action.json")][-2])
     # to_load.append([l for l in logs if l.endswith("flask.json")][-2])
     # to_load.append([l for l in logs if l.endswith("next_action.json")][-1])
     # to_load.append([l for l in logs if l.endswith("flask.json")][-1])
+    if to_load:
+        print("Pre-loading registered LLM answers:")
+        print("\n".join(to_load))
     for tl in to_load:
         chat_dbg_log.append(open(f"logs/openai/{tl}").read())
     pass
@@ -93,10 +104,11 @@ class Thought:
             error_message = e.message
             self.agent.bot.log_room.send_text(f"The template is invalid. Error at line {error_line}: {error_message}")
             print(f"The template is invalid. Error at line {error_line}: {error_message}")
+            return
 
         self.update_context()
         populated_prompt = template.render(**{'c': types.SimpleNamespace(**self.context)})
-        s, _ = self.agent.chatgpt_request(populated_prompt)
+        s = self.agent.chatgpt_request(populated_prompt)
 
         if C.JSON_LOG:
             global chat_dbg_log
@@ -110,6 +122,7 @@ class Thought:
                 with open(filename, "w") as file:
                     file.write(s)
 
+        # Dispatching to a tool or generating another request
         d = utils.extract_json(s)
         if not d or type(d) is not dict:
             self.fail()
@@ -117,19 +130,28 @@ class Thought:
             for k, v in d.items():
                 self.context[k] = v
             if "type" in d.keys() and "content" in d.keys():
-                toolname, _, answer = self.agent.tool_dispatcher(d)
-                if toolname.startswith("matrix"):
-                    self.agent.room.send_text(str(answer))
-                elif toolname.startswith("!"):
-                    self.do_step(toolname.lstrip("!"))
-                if type(answer) is list:
-                    for a in answer:
-                        self.tools_conversation.append((toolname,)+a)
+                tool_name = d["type"]
+                content = d["content"]
+                summary = None
+                if "summary" in d.keys():
+                    summary = d["summary"]
+
+                if tool_name in self.agent.tools.keys():
+                    answer = self.agent.tools[tool_name].execute_query(content)
+                    if type(answer) is not list:
+                        answer = [answer]
+                    for q, a in answer:
+                        if summary:
+                            query = summary
+                        else:
+                            query = q
+                        self.agent.append_log(f"Tool {d['type']} request:\n{query}", True)
+                        self.agent.append_log(f"Tool {d['type']} answer:\n{a}", True)
+                        self.tools_conversation.append((tool_name, query, a))
+                elif tool_name.startswith("!"):
+                    self.do_step(tool_name.lstrip("!"))
                 else:
-                    if type(answer) is tuple:
-                        self.tools_conversation.append((toolname,) + answer)
-                    else:
-                        self.tools_conversation.append((toolname, answer))
+                    self.agent.bot.log_room.send_text(f"Error. Tool unknown: {tool_name}")
 
     def eval_metric(self):
         locals_dict = {}
@@ -200,10 +222,10 @@ class Agent:
             self.conversation_summary = result[0]
 
         self.tools = {
+            "matrix": tools.matrix.MatrixModule(self.room),
             "sql": tools.sql.SqlModule(self.playground_db_name),
-            "flask": tools.flask_tool.FlaskModule(f"{C.ROOT_DIR}/playground_server/",
+            "flaskpy": tools.flaskpy.FlaskPyModule(f"{C.ROOT_DIR}/playground_server/",
                                                   f"",
-                                                  flask_app,
                                                   self.playground_db_name)
         }
         self.update_conversation_context()
@@ -261,7 +283,7 @@ class Agent:
             START MESSAGES
             {page}
             END MESSAGES"""
-        answer, codes = self.chatgpt_request(prompt)
+        answer = self.chatgpt_request(prompt)
         return answer
 
     def update_conversation_context(self):
@@ -299,26 +321,6 @@ class Agent:
             previous_ts = ts
         self.conversation_context = (self.conversation_summary[1], page)
 
-    def tool_dispatcher(self, d):
-        if d["type"].startswith("matrix_") or d["type"] == "matrix":
-            self.room.send_text(str(d.get("content", "...")))
-            return d["type"], d["content"], ""
-        if d["type"].startswith("!"):
-            return d["type"], d["content"], ""
-        content = d["content"]
-        if type(content) is list:
-            content = "\n".join(content)
-        if d["type"] not in self.tools.keys():
-            return d["type"], d["content"], "Error: tool does not exist"
-        answer = self.tools[d["type"]].execute_query(content)
-        if type(answer) is list:
-            for q, a in answer:
-                self.append_log(f"Tool {d['type']} request:\n{q}", True)
-                self.append_log(f"Tool {d['type']} answer:\n{a}", True)
-        else:
-            self.append_log(f"Tool {d['type']} answer:\n{answer}", True)
-        return d["type"], d["content"], answer
-
     def chatgpt_request(self, prompt):
         if type(prompt) is str:
             sprompt = prompt
@@ -331,13 +333,11 @@ class Agent:
 
         global chat_dbg_log
         if chat_dbg_log is not None:
-            print(f"__chat_dbg_log {chat_dbg_log}")
             if len(chat_dbg_log) > 0:
                 s = chat_dbg_log.pop(0)
                 self.append_log(f"gpt answer\n{s}", True)
-                return s, []
+                return s
             else:
-                print(f"__chat_dbg_log nonned")
                 chat_dbg_log = None
 
         rep = openai.ChatCompletion.create(
@@ -352,14 +352,7 @@ class Agent:
         s += f'tokens {rep["usage"]}\n'
         self.append_log(f"gpt answer\n{s}", True)
         self.bot.log_room.send_text(s)
-
-        bs = body.split("```")
-        code_blocks = list()
-        if len(bs) > 1:
-            for i in range(1, len(bs), 2):
-                code_blocks.append(bs[i])
-
-        return body, code_blocks
+        return body
 
     def use_prompt(self, prompt_name, command, room, sender, ts, recursion=0):
         print(self.temperature)
@@ -409,34 +402,7 @@ class Agent:
             prompt_context[f"{tool_name}_summary"]: tool.context()
             prompt_context[f"{tool_name}_conversation"]: tool.conversation()
         populated_prompt = prompt.format(**prompt_context)
-        answer, codes = self.chatgpt_request(populated_prompt)
-        if len(codes) == 0:
-            room.send_text(answer)
-        else:
-            for code in codes:
-                ret = self.tool_dispatcher(code)
-                if ret:
-                    tool_name, tool_query, tool_answer = ret
-                    print("__", ret)
-                    if tool_name.startswith("matrix_") or tool_name == "matrix":
-                        room.send_text(tool_query)
-                        self.request_finished = True
-                        return
-                    elif tool_name == "Error":
-                        room.send_text(tool_query)
-                        self.request_finished = True
-                        return
-                    elif tool_name.startswith("!"):
-                        self.use_prompt(tool_name.lstrip("!"), tool_query, room, self.bot.name, ts, recursion + 1)
-                        self.bot.log_room.send_text(f"{self.bot.name}: Sending prompt {tool_name} with instruction {tool_query}")
-                    else:
-                        if tool_answer:
-                            for query, query_result in tool_answer:
-                                print(query, query_result)
-                                self.bot.log_room.send_text(f"{self.bot.name}: {query}")
-                                self.bot.log_room.send_text(f"{tool_name}: {str(query_result)}")
-                    break   # We only want to execute the first valid code
-            self.use_prompt(prompt_name, command, room, sender, ts, recursion+1)
+        self.chatgpt_request(populated_prompt)
 
     def on_message(self, event):
         if event["origin_server_ts"] < self.first_ts:

@@ -44,14 +44,15 @@ from utils import db_req
 import configuration as C
 
 
+# TODO: flaskpy must put the summary in the tools conversation
+# TODO: replace the path to the DB with a conf variable in flaskpy
+# TODO: select erasure of discussion context
 # TODO: retry on OpenAI error
 # TODO: Interrupt button on the web interface
 # TODO: recursion limit parameter on prompts
 # TODO: Write regression tests, make the framework for that
 # TODO: The summarization prompt should be acquired from the prompts table and should be agent specific
 # TODO: Make listener mode where the agent listens to a conversation and sums it up on demand
-# TODO: Create a "request" object (and forget the conversation in case the task fail?)
-# TODO: find a way to put the prompts in the github repo
 # TODO: Bouton reset unique (tables+contexte) sur la page principale de l'agent
 # TODO: Reactivate the avatar change but as an option in the web interface
 # TODO nginx redirect from 80 (and https) to 8448 (so that the server url is https://matrix.iv-labs.org instead
@@ -275,6 +276,14 @@ def conversation_context_reset(room_id):
     bot.agents[room_id].conversation_summary = (-1, "")
     bot.agents[room_id].update_conversation_context()
     return redirect(f'/agent/{room_id}/conversation_context')
+
+@app.route('/agent/<room_id>/conversation_context/<message_id>/delete', methods=["POST"])
+@auth.login_required
+def delete_message(room_id, message_id):
+    # Assuming each message has a unique id and you can retrieve it from your database
+    db_req(bot.agents[room_id].system_db_name, f"DELETE FROM conversation WHERE id={message_id};")
+    bot.agents[room_id].update_conversation_context()  # Update the conversation context after deleting the message
+    return '', 204  # Return no content status code
 
 
 #
